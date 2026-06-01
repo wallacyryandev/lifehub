@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LifeHub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-bg">
+    <div class="auth-orb orb1"></div>
+    <div class="auth-orb orb2"></div>
+    <div class="auth-orb orb3"></div>
+  </div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-mark">L</span>
+      <span class="logo-text">LifeHub</span>
+    </div>
+    <p class="auth-tagline">Sua vida, organizada.</p>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Entrar</button>
+      <button class="auth-tab" data-tab="register">Cadastrar</button>
+    </div>
+
+    <!-- Login -->
+    <div id="tab-login" class="auth-form active">
+      <div class="field-group">
+        <label>E-mail</label>
+        <input type="email" id="login-email" placeholder="seu@email.com" />
+      </div>
+      <div class="field-group">
+        <label>Senha</label>
+        <input type="password" id="login-senha" placeholder="••••••••" />
+      </div>
+      <div id="login-error" class="auth-error hidden"></div>
+      <button class="btn-primary full" onclick="doLogin()">Entrar</button>
+      <p class="auth-hint">Demo: demo@lifehub.com / demo123</p>
+    </div>
+
+    <!-- Register -->
+    <div id="tab-register" class="auth-form">
+      <div class="field-group">
+        <label>Nome</label>
+        <input type="text" id="reg-nome" placeholder="Seu nome" />
+      </div>
+      <div class="field-group">
+        <label>E-mail</label>
+        <input type="email" id="reg-email" placeholder="seu@email.com" />
+      </div>
+      <div class="field-group">
+        <label>Senha</label>
+        <input type="password" id="reg-senha" placeholder="Mínimo 6 caracteres" />
+      </div>
+      <div id="reg-error" class="auth-error hidden"></div>
+      <button class="btn-primary full" onclick="doRegister()">Criar Conta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark">L</span>
+      <span class="logo-text">LifeHub</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-module="dashboard" onclick="switchModule('dashboard', this)">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-module="treino" onclick="switchModule('treino', this)">
+        <svg viewBox="0 0 24 24"><path d="M6.5 6.5h11v11h-11z"/><path d="M3 9.5h3m12 0h3M9.5 3v3m0 12v3m5-18v3m0 12v3"/></svg>
+        <span>Treino</span>
+      </button>
+      <button class="nav-item" data-module="estudos" onclick="switchModule('estudos', this)">
+        <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span>Estudos</span>
+      </button>
+      <button class="nav-item" data-module="financas" onclick="switchModule('financas', this)">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span>Finanças</span>
+      </button>
+      <button class="nav-item" data-module="musicas" onclick="switchModule('musicas', this)">
+        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Música</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <span id="user-name-sidebar">Usuário</span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()" title="Sair">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Mobile topbar -->
+  <div class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <span class="topbar-title" id="topbar-title">Dashboard</span>
+    <div class="user-avatar sm" id="user-avatar-top">U</div>
+  </div>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- ── DASHBOARD ── -->
+    <section id="module-dashboard" class="module active">
+      <div class="module-header">
+        <h1>Dashboard</h1>
+        <p id="dash-greeting">Bom dia! 👋</p>
+      </div>
+      <div class="bento-grid dashboard-grid">
+        <div class="bento-card card-treino-dash" onclick="switchModule('treino', document.querySelector('[data-module=treino]'))">
+          <div class="card-icon">💪</div>
+          <h3>Treino</h3>
+          <p id="dash-treino-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-estudos-dash" onclick="switchModule('estudos', document.querySelector('[data-module=estudos]'))">
+          <div class="card-icon">📚</div>
+          <h3>Estudos</h3>
+          <p id="dash-estudos-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-financas-dash" onclick="switchModule('financas', document.querySelector('[data-module=financas]'))">
+          <div class="card-icon">💰</div>
+          <h3>Saldo</h3>
+          <p id="dash-saldo" class="dash-value">R$ 0,00</p>
+        </div>
+        <div class="bento-card card-musicas-dash" onclick="switchModule('musicas', document.querySelector('[data-module=musicas]'))">
+          <div class="card-icon">🎵</div>
+          <h3>Música</h3>
+          <p id="dash-musicas-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-hoje">
+          <h3>Hoje</h3>
+          <p id="dash-hoje-data" class="date-display"></p>
+          <p id="dash-hoje-dia" class="day-display"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TREINO ── -->
+    <section id="module-treino" class="module hidden">
+      <div class="module-header">
+        <h1>Treino Semanal</h1>
+        <p>Registre seus exercícios por dia</p>
+      </div>
+      <div class="bento-grid treino-grid" id="treino-grid"></div>
+
+      <!-- Modal Treino -->
+      <div class="modal-overlay hidden" id="treino-modal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 id="treino-modal-title">Segunda</h2>
+            <button class="modal-close" onclick="closeModal('treino-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="exercise-list" id="exercise-list"></div>
+            <div class="add-exercise-form">
+              <h4>+ Adicionar Exercício</h4>
+              <div class="form-row">
+                <div class="field-group">
+                  <label>Exercício</label>
+                  <input type="text" id="ex-nome" placeholder="Ex: Supino reto" />
+                </div>
+                <div class="field-group">
+                  <label>Carga (kg)</label>
+                  <input type="number" id="ex-carga" placeholder="80" min="0" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field-group">
+                  <label>Séries</label>
+                  <input type="number" id="ex-series" placeholder="4" min="1" />
+                </div>
+                <div class="field-group">
+                  <label>Repetições</label>
+                  <input type="number" id="ex-reps" placeholder="12" min="1" />
+                </div>
+              </div>
+              <button class="btn-primary" onclick="addExercicio()">Salvar Exercício</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ESTUDOS ── -->
+    <section id="module-estudos" class="module hidden">
+      <div class="module-header">
+        <h1>Estudos</h1>
+        <button class="btn-primary" onclick="openAddMateriaModal()">+ Nova Matéria</button>
+      </div>
+      <div class="bento-grid estudos-grid" id="estudos-grid"></div>
+
+      <!-- Modal Matéria -->
+      <div class="modal-overlay hidden" id="materia-modal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 id="materia-modal-title">Matéria</h2>
+            <button class="modal-close" onclick="closeModal('materia-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="topico-list" id="topico-list"></div>
+            <div class="add-topico-form">
+              <h4>+ Adicionar Tópico</h4>
+              <div class="form-row">
+                <div class="field-group" style="flex:1">
+                  <label>Título do Tópico</label>
+                  <input type="text" id="topico-titulo" placeholder="Ex: Capítulo 3 - Ponteiros" />
+                </div>
+                <button class="btn-primary" style="align-self:flex-end" onclick="addTopico()">Salvar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Nova Matéria -->
+      <div class="modal-overlay hidden" id="add-materia-modal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Nova Matéria</h2>
+            <button class="modal-close" onclick="closeModal('add-materia-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="field-group">
+              <label>Nome da Matéria</label>
+              <input type="text" id="nova-materia-nome" placeholder="Ex: Matemática" />
+            </div>
+            <button class="btn-primary full" onclick="addMateria()">Criar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FINANÇAS ── -->
+    <section id="module-financas" class="module hidden">
+      <div class="module-header">
+        <h1>Finanças</h1>
+        <p>Controle suas entradas e saídas</p>
+      </div>
+      <div class="financas-layout">
+        <div class="financas-left">
+          <div class="saldo-card">
+            <span class="saldo-label">Saldo Total</span>
+            <span class="saldo-valor" id="saldo-display">R$ 0,00</span>
+          </div>
+          <div class="bento-card add-transacao-card">
+            <h3>Nova Transação</h3>
+            <div class="field-group">
+              <label>Valor (R$)</label>
+              <input type="number" id="fin-valor" placeholder="0,00" min="0" step="0.01" />
+            </div>
+            <div class="field-group">
+              <label>Descrição</label>
+              <input type="text" id="fin-descricao" placeholder="Ex: Salário, Mercado..." />
+            </div>
+            <div class="btn-row">
+              <button class="btn-entrada" onclick="addTransacao('entrada')">↑ Entrada</button>
+              <button class="btn-saida" onclick="addTransacao('saida')">↓ Saída</button>
+            </div>
+          </div>
+        </div>
+        <div class="financas-right">
+          <div class="bento-card historico-card">
+            <h3>Histórico</h3>
+            <div class="historico-list" id="historico-list">
+              <p class="empty-state">Nenhuma transação ainda</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MÚSICA ── -->
+    <section id="module-musicas" class="module hidden">
+      <div class="module-header">
+        <h1>Música</h1>
+        <button class="btn-primary" onclick="openAddPlaylistModal()">+ Nova Playlist</button>
+      </div>
+      <div class="musicas-layout">
+        <div class="playlists-panel" id="playlists-panel">
+          <p class="empty-state" id="playlists-empty">Nenhuma playlist ainda</p>
+        </div>
+        <div class="player-panel">
+          <div class="bento-card player-card" id="player-card">
+            <div class="now-playing-art">🎵</div>
+            <div class="now-playing-info">
+              <p class="now-playing-title" id="player-titulo">Nenhuma música</p>
+              <p class="now-playing-sub" id="player-playlist">—</p>
+            </div>
+            <div class="player-controls">
+              <button class="ctrl-btn" id="ctrl-shuffle" onclick="toggleShuffle()" title="Aleatório">
+                <svg viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+              </button>
+              <button class="ctrl-btn" onclick="prevMusica()" title="Anterior">
+                <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+              </button>
+              <button class="ctrl-btn play-btn" id="ctrl-play" onclick="togglePlay()" title="Play/Pause">
+                <svg id="icon-play" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <svg id="icon-pause" viewBox="0 0 24 24" class="hidden"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+              <button class="ctrl-btn" onclick="nextMusica()" title="Próxima">
+                <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </button>
+              <button class="ctrl-btn" id="ctrl-order" onclick="toggleOrder()" title="Em ordem">
+                <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="player-progress">
+              <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            </div>
+            <a id="player-link" href="#" target="_blank" class="player-open-link hidden">Abrir link externo ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Add Playlist -->
+      <div class="modal-overlay hidden" id="add-playlist-modal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Nova Playlist</h2>
+            <button class="modal-close" onclick="closeModal('add-playlist-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="field-group">
+              <label>Nome</label>
+              <input type="text" id="nova-playlist-nome" placeholder="Ex: Lo-fi Chill" />
+            </div>
+            <button class="btn-primary full" onclick="addPlaylist()">Criar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Add Música -->
+      <div class="modal-overlay hidden" id="add-musica-modal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Adicionar Música</h2>
+            <button class="modal-close" onclick="closeModal('add-musica-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="field-group">
+              <label>Título</label>
+              <input type="text" id="nova-musica-titulo" placeholder="Nome da música" />
+            </div>
+            <div class="field-group">
+              <label>Link (YouTube, Spotify, etc.)</label>
+              <input type="url" id="nova-musica-link" placeholder="https://..." />
+            </div>
+            <button class="btn-primary full" onclick="addMusica()">Adicionar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

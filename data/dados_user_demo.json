@@ -1,0 +1,19 @@
+{
+  "treino": {
+    "Segunda": [],
+    "Terça": [],
+    "Quarta": [],
+    "Quinta": [],
+    "Sexta": [],
+    "Sábado": [],
+    "Domingo": []
+  },
+  "estudos": [],
+  "financas": {
+    "saldo": 0,
+    "historico": []
+  },
+  "musicas": {
+    "playlists": []
+  }
+}
