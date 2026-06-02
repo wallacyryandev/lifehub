@@ -38,20 +38,26 @@ async function getUserData(userId) {
     .from('dados_usuario')
     .select('dados')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    // Cria registro com template padrão
-    await supabase.from('dados_usuario').insert({ user_id: userId, dados: TEMPLATE });
-    return JSON.parse(JSON.stringify(TEMPLATE));
+  if (error) console.error('Erro ao buscar dados:', JSON.stringify(error));
+
+  if (!data) {
+    const template = JSON.parse(JSON.stringify(TEMPLATE));
+    const { error: insertError } = await supabase
+      .from('dados_usuario')
+      .insert({ user_id: userId, dados: template });
+    if (insertError) console.error('Erro ao criar dados:', JSON.stringify(insertError));
+    return template;
   }
   return data.dados;
 }
 
 async function saveUserData(userId, dados) {
-  await supabase
+  const { error } = await supabase
     .from('dados_usuario')
     .upsert({ user_id: userId, dados });
+  if (error) console.error('Erro ao salvar dados:', JSON.stringify(error));
 }
 
 function requireAuth(req, res, next) {
