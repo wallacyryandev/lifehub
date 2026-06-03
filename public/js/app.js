@@ -148,6 +148,10 @@ async function doLogout() {
 // ── Load All Data ─────────────────────────────────────────────────────
 async function loadAllData() {
   appData = await api('GET', '/api/data');
+  // garante campos novos mesmo em contas antigas
+  if (!appData.notas)   appData.notas   = [];
+  if (!appData.livros)  appData.livros  = [];
+  if (!appData.eventos) appData.eventos = {};
   renderDashboard();
   renderTreino();
   renderEstudos();
@@ -167,7 +171,11 @@ function switchModule(name, btn) {
   }
   if (btn) btn.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', treino:'Treino', estudos:'Estudos', financas:'Finanças', musicas:'Música' };
+  const titles = { dashboard:'Dashboard', treino:'Treino', estudos:'Estudos', financas:'Finanças', musicas:'Música', clima:'Clima', notas:'Notas', livros:'Livros', calendario:'Calendário' };
+  if (name === 'clima') loadClima();
+  if (name === 'notas') renderNotas();
+  if (name === 'livros') renderLivros();
+  if (name === 'calendario') renderCalendario();
   document.getElementById('topbar-title').textContent = titles[name] || name;
 
   currentModule = name;
@@ -220,6 +228,25 @@ function renderDashboard() {
   const totalSongs = pls.reduce((a, p) => a + p.musicas.length, 0);
   document.getElementById('dash-musicas-info').textContent =
     pls.length ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
+
+  // Notas
+  const notas = getNotas();
+  document.getElementById('dash-notas-info').textContent =
+    notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
+
+  // Livros
+  const livros = getLivros();
+  const lendo = livros.filter(l => l.status === 'lendo').length;
+  const lidos = livros.filter(l => l.status === 'lido').length;
+  document.getElementById('dash-livros-info').textContent =
+    livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
+
+  // Eventos hoje
+  const hoje2 = new Date();
+  const chaveHoje = `${hoje2.getFullYear()}-${hoje2.getMonth()}-${hoje2.getDate()}`;
+  const eventos = getEventos()[chaveHoje] || [];
+  document.getElementById('dash-hoje-eventos').textContent =
+    eventos.length ? `📅 ${eventos.length} evento(s) hoje` : '';
 }
 
 // ══════════════════ TREINO ══════════════════
@@ -780,4 +807,349 @@ function toggleOrder() {
   if (musicPlayer.order) musicPlayer.shuffle = false;
   document.getElementById('ctrl-order').classList.toggle('active', musicPlayer.order);
   document.getElementById('ctrl-shuffle').classList.toggle('active', musicPlayer.shuffle);
+}
+// ══════════════════ CLIMA ══════════════════
+let climaData = null;
+
+function getWeatherIcon(code) {
+  if (code === 0) return '☀️';
+  if (code <= 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code <= 48) return '🌫️';
+  if (code <= 57) return '🌧️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '🌨️';
+  if (code <= 82) return '🌦️';
+  if (code <= 86) return '❄️';
+  if (code <= 99) return '⛈️';
+  return '🌤️';
+}
+
+function getWeatherDesc(code) {
+  if (code === 0) return 'Céu limpo';
+  if (code === 1) return 'Predominante limpo';
+  if (code === 2) return 'Parcialmente nublado';
+  if (code === 3) return 'Nublado';
+  if (code <= 48) return 'Neblina';
+  if (code <= 55) return 'Garoa';
+  if (code <= 57) return 'Garoa congelante';
+  if (code <= 65) return 'Chuva';
+  if (code <= 67) return 'Chuva forte';
+  if (code <= 77) return 'Neve';
+  if (code <= 82) return 'Pancadas de chuva';
+  if (code <= 86) return 'Pancadas de neve';
+  if (code <= 99) return 'Tempestade';
+  return 'Indisponível';
+}
+
+async function loadClima() {
+  const loading = document.getElementById('clima-loading');
+  const content = document.getElementById('clima-content');
+  const errDiv  = document.getElementById('clima-error');
+
+  loading.classList.remove('hidden');
+  content.classList.add('hidden');
+  errDiv.classList.add('hidden');
+
+  if (!navigator.geolocation) {
+    loading.classList.add('hidden');
+    errDiv.classList.remove('hidden');
+    document.getElementById('clima-error-msg').textContent = 'Geolocalização não suportada pelo navegador.';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude, longitude } = pos.coords;
+    try {
+      // Busca o nome da cidade com geocodificação reversa
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+      const geoData = await geoRes.json();
+      const cidade = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || 'Sua localização';
+      const estado = geoData.address?.state || '';
+      document.getElementById('clima-cidade-label').textContent = `📍 ${cidade}${estado ? ', ' + estado : ''}`;
+
+      // Busca previsão 5 dias (open-meteo — gratuito, sem chave)
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
+      const wRes = await fetch(url);
+      const wData = await wRes.json();
+
+      const cur = wData.current;
+      const daily = wData.daily;
+
+      // Hoje (card grande)
+      document.getElementById('clima-temp-hoje').textContent = Math.round(cur.temperature_2m) + '°C';
+      document.getElementById('clima-desc-hoje').textContent = getWeatherDesc(cur.weather_code);
+      document.getElementById('clima-icon-hoje').textContent = getWeatherIcon(cur.weather_code);
+      document.getElementById('clima-feels').textContent = `Sensação: ${Math.round(cur.apparent_temperature)}°C`;
+      document.getElementById('clima-umidade').textContent = `${cur.relative_humidity_2m}% umidade`;
+      document.getElementById('clima-vento').textContent = `${Math.round(cur.wind_speed_10m)} km/h vento`;
+      const vis = cur.visibility >= 1000 ? (cur.visibility/1000).toFixed(0) + ' km' : cur.visibility + ' m';
+      document.getElementById('clima-visib').textContent = `${vis} visib.`;
+
+      // Dashboard mini
+      document.getElementById('dash-clima-icon').textContent = getWeatherIcon(cur.weather_code);
+      document.getElementById('dash-clima-info').textContent = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
+
+      // Próximos dias
+      const diasNomes = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+      const forecastEl = document.getElementById('clima-forecast');
+      forecastEl.innerHTML = daily.time.map((dateStr, i) => {
+        const d = new Date(dateStr + 'T12:00:00');
+        const isHoje = i === 0;
+        return `
+          <div class="clima-day-card bento-card ${isHoje ? 'clima-hoje-highlight' : ''}">
+            <div class="clima-day-nome">${isHoje ? 'Hoje' : diasNomes[d.getDay()]}</div>
+            <div class="clima-day-icon">${getWeatherIcon(daily.weather_code[i])}</div>
+            <div class="clima-day-desc">${getWeatherDesc(daily.weather_code[i])}</div>
+            <div class="clima-day-temps">
+              <span class="clima-max">${Math.round(daily.temperature_2m_max[i])}°</span>
+              <span class="clima-min">${Math.round(daily.temperature_2m_min[i])}°</span>
+            </div>
+          </div>`;
+      }).join('');
+
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+    } catch (e) {
+      loading.classList.add('hidden');
+      errDiv.classList.remove('hidden');
+      document.getElementById('clima-error-msg').textContent = 'Erro ao buscar dados do clima. Tente novamente.';
+    }
+  }, () => {
+    loading.classList.add('hidden');
+    errDiv.classList.remove('hidden');
+    document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada. Habilite nas configurações do navegador.';
+  });
+}
+
+// ══════════════════ NOTAS ══════════════════
+let notaAtualId = null;
+let notaAutoSaveTimer = null;
+
+function getNotas() { return appData?.notas || []; }
+
+async function addNota() {
+  const res = await api('POST', '/api/notas');
+  if (res.success) {
+    appData.notas = res.notas;
+    renderNotas();
+    renderDashboard();
+    abrirNota(res.notas[0].id);
+  }
+}
+
+function renderNotas() {
+  const notas = getNotas();
+  const lista = document.getElementById('notas-lista');
+  if (!notas.length) {
+    lista.innerHTML = '<p class="empty-state">Nenhuma nota ainda</p>';
+    return;
+  }
+  lista.innerHTML = notas.map(n => `
+    <div class="nota-item ${notaAtualId === n.id ? 'active' : ''}" onclick="abrirNota(${n.id})">
+      <div class="nota-item-titulo">${n.titulo || 'Sem título'}</div>
+      <div class="nota-item-data">${n.data}</div>
+      <button class="btn-icon nota-del" onclick="event.stopPropagation();deletaNota(${n.id})">✕</button>
+    </div>`).join('');
+}
+
+function abrirNota(id) {
+  notaAtualId = id;
+  const nota = getNotas().find(n => n.id === id);
+  if (!nota) return;
+  renderNotas();
+  document.getElementById('nota-editor').innerHTML = `
+    <div class="nota-editor-header">
+      <input type="text" class="nota-titulo-input" id="nota-titulo-edit" value="${nota.titulo}" placeholder="Título da nota" oninput="autoSaveNota()" />
+      <span class="nota-data-edit">${nota.data}</span>
+    </div>
+    <textarea class="nota-textarea" id="nota-conteudo-edit" placeholder="Comece a escrever..." oninput="autoSaveNota()">${nota.conteudo}</textarea>`;
+}
+
+function autoSaveNota() {
+  clearTimeout(notaAutoSaveTimer);
+  notaAutoSaveTimer = setTimeout(async () => {
+    if (!notaAtualId) return;
+    const titulo   = document.getElementById('nota-titulo-edit')?.value || 'Sem título';
+    const conteudo = document.getElementById('nota-conteudo-edit')?.value || '';
+    const res = await api('PATCH', `/api/notas/${notaAtualId}`, { titulo, conteudo });
+    if (res.success) {
+      appData.notas = res.notas;
+      renderNotas();
+      renderDashboard();
+    }
+  }, 800);
+}
+
+async function deletaNota(id) {
+  const res = await api('DELETE', `/api/notas/${id}`);
+  if (res.success) {
+    appData.notas = res.notas;
+    if (notaAtualId === id) {
+      notaAtualId = null;
+      document.getElementById('nota-editor').innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`;
+    }
+    renderNotas();
+    renderDashboard();
+  }
+}
+
+// ══════════════════ LIVROS ══════════════════
+let livroTabAtual = 'lendo';
+
+function getLivros() { return appData?.livros || []; }
+
+function setLivroTab(status, btn) {
+  livroTabAtual = status;
+  document.querySelectorAll('.livro-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderLivros();
+}
+
+function renderLivros() {
+  const filtrados = getLivros().filter(l => l.status === livroTabAtual);
+  const grid = document.getElementById('livros-grid');
+  if (!filtrados.length) {
+    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado como lido ainda.'}</p>`;
+    return;
+  }
+  grid.innerHTML = filtrados.map(l => `
+    <div class="bento-card livro-card">
+      <div class="livro-emoji">${l.status === 'lido' ? '✅' : '📖'}</div>
+      <div class="livro-titulo">${l.titulo}</div>
+      <div class="livro-autor">${l.autor || '—'}</div>
+      <div class="livro-actions">
+        ${l.status === 'lendo' ? `<button class="btn-entrada" style="font-size:0.78rem;padding:0.4rem 0.7rem" onclick="marcarLido(${l.id})">Marcar como lido</button>` : ''}
+        <button class="btn-icon" onclick="deletaLivro(${l.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function addLivro() {
+  const titulo = document.getElementById('livro-titulo').value.trim();
+  const autor  = document.getElementById('livro-autor').value.trim();
+  const status = document.getElementById('livro-status').value;
+  if (!titulo) return alert('Informe o título do livro.');
+  const res = await api('POST', '/api/livros', { titulo, autor, status });
+  if (res.success) {
+    appData.livros = res.livros;
+    renderLivros();
+    renderDashboard();
+    closeModal('add-livro-modal');
+    document.getElementById('livro-titulo').value = '';
+    document.getElementById('livro-autor').value = '';
+  }
+}
+
+async function marcarLido(id) {
+  const res = await api('PATCH', `/api/livros/${id}`, { status: 'lido' });
+  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); }
+}
+
+async function deletaLivro(id) {
+  const res = await api('DELETE', `/api/livros/${id}`);
+  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); }
+}
+
+// ══════════════════ CALENDÁRIO ══════════════════
+let calAno = new Date().getFullYear();
+let calMes = new Date().getMonth();
+let calDiaSelecionado = null;
+
+function getEventos() { return appData?.eventos || {}; }
+
+function calNavMes(dir) {
+  if (dir === 0) { calAno = new Date().getFullYear(); calMes = new Date().getMonth(); }
+  else { calMes += dir; if (calMes > 11) { calMes = 0; calAno++; } if (calMes < 0) { calMes = 11; calAno--; } }
+  renderCalendario();
+}
+
+function renderCalendario() {
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('cal-mes-label').textContent = `${meses[calMes]} ${calAno}`;
+
+  const eventos = getEventos();
+  const hoje = new Date();
+  const primeiroDia = new Date(calAno, calMes, 1).getDay();
+  const diasNoMes = new Date(calAno, calMes + 1, 0).getDate();
+
+  let html = '';
+  for (let i = 0; i < primeiroDia; i++) html += '<div class="cal-day vazio"></div>';
+
+  for (let d = 1; d <= diasNoMes; d++) {
+    const chave = `${calAno}-${calMes}-${d}`;
+    const temEvento = (eventos[chave] || []).length > 0;
+    const isHoje = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
+    const isSel = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
+    html += `<div class="cal-day ${isHoje ? 'cal-hoje' : ''} ${isSel ? 'cal-selecionado' : ''}" onclick="selecionarDia(${d})">
+      <span>${d}</span>
+      ${temEvento ? '<div class="cal-dot"></div>' : ''}
+    </div>`;
+  }
+
+  document.getElementById('cal-days').innerHTML = html;
+  if (calDiaSelecionado) renderEventosDia();
+}
+
+function selecionarDia(d) {
+  calDiaSelecionado = { d, m: calMes, a: calAno };
+  renderCalendario();
+  const painel = document.getElementById('cal-eventos-hoje');
+  painel.style.display = 'block';
+  renderEventosDia();
+}
+
+function renderEventosDia() {
+  const { d, m, a } = calDiaSelecionado;
+  const chave = `${a}-${m}-${d}`;
+  const eventos = getEventos()[chave] || [];
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  document.getElementById('cal-eventos-titulo').textContent = `${d} de ${meses[m]}`;
+  const lista = document.getElementById('cal-eventos-lista');
+  if (!eventos.length) {
+    lista.innerHTML = '<p class="empty-state" style="padding:0.8rem 0">Nenhum evento neste dia</p>';
+    return;
+  }
+  lista.innerHTML = eventos.map(ev => `
+    <div class="evento-item">
+      <div class="evento-dot"></div>
+      <div class="evento-info">
+        <span class="evento-titulo">${ev.titulo}</span>
+        ${ev.hora ? `<span class="evento-hora">🕐 ${ev.hora}</span>` : ''}
+      </div>
+      <button class="btn-icon" onclick="deletaEvento('${chave}', ${ev.id})">✕</button>
+    </div>`).join('');
+}
+
+function openAddEvento() {
+  document.getElementById('evento-titulo').value = '';
+  document.getElementById('evento-hora').value = '';
+  openModal('add-evento-modal');
+}
+
+async function addEvento() {
+  if (!calDiaSelecionado) return;
+  const titulo = document.getElementById('evento-titulo').value.trim();
+  if (!titulo) return alert('Informe o título do evento.');
+  const hora = document.getElementById('evento-hora').value;
+  const { d, m, a } = calDiaSelecionado;
+  const chave = `${a}-${m}-${d}`;
+  const res = await api('POST', `/api/eventos/${chave}`, { titulo, hora });
+  if (res.success) {
+    appData.eventos = res.eventos;
+    renderCalendario();
+    renderEventosDia();
+    renderDashboard();
+    closeModal('add-evento-modal');
+  }
+}
+
+async function deletaEvento(chave, id) {
+  const res = await api('DELETE', `/api/eventos/${chave}/${id}`);
+  if (res.success) {
+    appData.eventos = res.eventos;
+    renderCalendario();
+    renderEventosDia();
+    renderDashboard();
+  }
 }

@@ -714,3 +714,246 @@ input, button, textarea { font-family: var(--font-body); }
   .treino-grid { grid-template-columns: repeat(2, 1fr); }
   .estudos-grid { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════ DASHBOARD — NOVOS CARDS ══════════════════ */
+.dashboard-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+.card-clima-dash  { grid-column: 1; background: linear-gradient(135deg, var(--surface), rgba(93,224,200,0.08)); }
+.card-notas-dash  { grid-column: 2; }
+.card-livros-dash { grid-column: 3; }
+.card-hoje        { grid-column: 1 / 4; }
+
+/* ══════════════════ CLIMA ══════════════════ */
+.clima-loading-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1rem; padding: 3rem;
+  color: var(--text-sub);
+}
+.clima-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--surface3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.clima-hoje-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 2rem; margin-bottom: 1rem;
+  background: linear-gradient(135deg, var(--surface), rgba(124,106,245,0.1));
+}
+.clima-temp-big {
+  font-family: var(--font-display); font-size: 4rem; font-weight: 800;
+  background: linear-gradient(135deg, var(--text), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+.clima-desc-hoje { font-size: 1.1rem; color: var(--text-sub); margin: 0.3rem 0; }
+.clima-feels { font-size: 0.85rem; color: var(--text-dim); }
+
+.clima-hoje-right { display: flex; flex-direction: column; align-items: flex-end; gap: 1rem; }
+.clima-icon-big { font-size: 4rem; }
+.clima-hoje-details { display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end; }
+.clima-detail { display: flex; gap: 0.4rem; font-size: 0.82rem; color: var(--text-sub); align-items: center; }
+
+.clima-forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.8rem;
+}
+.clima-day-card {
+  text-align: center; padding: 1rem 0.5rem;
+  transition: all 0.2s;
+}
+.clima-day-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+.clima-hoje-highlight { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), inset 0 0 20px rgba(124,106,245,0.08); }
+.clima-day-nome { font-family: var(--font-display); font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-sub); }
+.clima-day-icon { font-size: 2rem; margin-bottom: 0.4rem; }
+.clima-day-desc { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.5rem; min-height: 2em; line-height: 1.3; }
+.clima-day-temps { display: flex; justify-content: center; gap: 0.5rem; }
+.clima-max { font-family: var(--font-display); font-weight: 700; color: var(--text); font-size: 0.95rem; }
+.clima-min { font-family: var(--font-display); color: var(--text-dim); font-size: 0.95rem; }
+
+/* ══════════════════ NOTAS ══════════════════ */
+.notas-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 1rem;
+  height: calc(100vh - 200px);
+}
+
+.notas-lista {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+
+.nota-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.2s;
+  position: relative;
+}
+.nota-item:hover { background: var(--surface2); }
+.nota-item.active { background: rgba(124,106,245,0.12); border-left: 3px solid var(--accent); }
+.nota-item-titulo { flex: 1; font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nota-item-data { font-size: 0.72rem; color: var(--text-dim); flex-shrink: 0; }
+.nota-del { opacity: 0; transition: opacity 0.2s; }
+.nota-item:hover .nota-del { opacity: 1; }
+
+.nota-editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.nota-editor-vazio {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 0.5rem; color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.nota-editor-vazio p:first-child { font-size: 2.5rem; }
+
+.nota-editor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+}
+.nota-titulo-input {
+  flex: 1;
+  background: transparent; border: none; outline: none;
+  font-family: var(--font-display); font-size: 1.2rem; font-weight: 700;
+  color: var(--text);
+}
+.nota-titulo-input::placeholder { color: var(--text-dim); }
+.nota-data-edit { font-size: 0.78rem; color: var(--text-dim); flex-shrink: 0; }
+
+.nota-textarea {
+  flex: 1; width: 100%;
+  background: transparent; border: none; outline: none; resize: none;
+  padding: 1.2rem;
+  color: var(--text); font-family: var(--font-body); font-size: 0.95rem; line-height: 1.7;
+}
+.nota-textarea::placeholder { color: var(--text-dim); }
+
+/* ══════════════════ LIVROS ══════════════════ */
+.livros-tabs {
+  display: flex; gap: 0.5rem; margin-bottom: 1.2rem;
+}
+.livro-tab {
+  padding: 0.55rem 1.1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-sub);
+  font-size: 0.88rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.livro-tab.active {
+  background: rgba(124,106,245,0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.livros-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+.livro-card {
+  display: flex; flex-direction: column; gap: 0.5rem; text-align: center;
+  padding: 1.5rem 1rem; transition: all 0.2s;
+}
+.livro-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+.livro-emoji { font-size: 2.5rem; margin-bottom: 0.2rem; }
+.livro-titulo { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
+.livro-autor { font-size: 0.8rem; color: var(--text-sub); }
+.livro-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem; align-items: center; }
+
+/* ══════════════════ CALENDÁRIO ══════════════════ */
+.cal-grid-wrapper { padding: 1.2rem; }
+
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem; margin-bottom: 0.5rem;
+  text-align: center;
+}
+.cal-weekdays span {
+  font-size: 0.75rem; color: var(--text-dim);
+  font-family: var(--font-display); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 0.3rem 0;
+}
+
+.cal-days {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.2s;
+  font-size: 0.9rem; position: relative;
+  border: 1px solid transparent;
+}
+.cal-day:hover { background: var(--surface2); border-color: var(--border); }
+.cal-day.vazio { cursor: default; }
+.cal-day.vazio:hover { background: transparent; border-color: transparent; }
+
+.cal-hoje {
+  background: rgba(124,106,245,0.15);
+  border-color: var(--accent) !important;
+  color: var(--accent);
+  font-weight: 700;
+}
+.cal-selecionado {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(124,106,245,0.4);
+}
+.cal-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent2);
+  margin-top: 2px;
+}
+.cal-selecionado .cal-dot { background: rgba(255,255,255,0.7); }
+
+.evento-item {
+  display: flex; align-items: center; gap: 0.8rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.evento-item:last-child { border-bottom: none; }
+.evento-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  flex-shrink: 0;
+}
+.evento-info { flex: 1; }
+.evento-titulo { font-size: 0.9rem; font-weight: 600; display: block; }
+.evento-hora { font-size: 0.78rem; color: var(--text-sub); }
+
+/* ══════════════════ RESPONSIVE NOVOS MÓDULOS ══════════════════ */
+@media (max-width: 900px) {
+  .clima-forecast-grid { grid-template-columns: repeat(3, 1fr); }
+  .notas-layout { grid-template-columns: 1fr; height: auto; }
+  .nota-editor { min-height: 300px; }
+  .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+  .card-hoje { grid-column: 1 / 3; }
+  .card-livros-dash { grid-column: 1; }
+}
+@media (max-width: 600px) {
+  .clima-hoje-card { flex-direction: column; text-align: center; gap: 1.5rem; }
+  .clima-hoje-right { align-items: center; }
+  .clima-hoje-details { align-items: center; }
+  .clima-forecast-grid { grid-template-columns: repeat(2, 1fr); }
+}

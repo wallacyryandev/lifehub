@@ -18,7 +18,10 @@ const TEMPLATE = {
   treino: { segunda: [], terca: [], quarta: [], quinta: [], sexta: [], sabado: [], domingo: [] },
   estudos: [],
   financas: { saldo: 0, historico: [] },
-  musicas: { playlists: [] }
+  musicas: { playlists: [] },
+  notas: [],
+  livros: [],
+  eventos: {}
 };
 
 // ── Middleware ──────────────────────────────────────────────────────────────
@@ -300,6 +303,117 @@ app.delete('/api/musicas/playlist/:playlistId/musica/:musicaId', requireAuth, as
   }
   await saveUserData(req.session.userId, data);
   res.json({ success: true });
+});
+
+// ── Notas ─────────────────────────────────────────────────────────────────────
+app.get('/api/notas', requireAuth, async (req, res) => {
+  const data = await getUserData(req.session.userId);
+  res.json(data.notas || []);
+});
+
+app.post('/api/notas', requireAuth, async (req, res) => {
+  const data = await getUserData(req.session.userId);
+  if (!data.notas) data.notas = [];
+  const nova = {
+    id: Date.now(),
+    titulo: 'Nova Nota',
+    conteudo: '',
+    data: new Date().toLocaleDateString('pt-BR')
+  };
+  data.notas.unshift(nova);
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, notas: data.notas });
+});
+
+app.patch('/api/notas/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { titulo, conteudo } = req.body;
+  const data = await getUserData(req.session.userId);
+  if (!data.notas) data.notas = [];
+  const nota = data.notas.find(n => n.id == id);
+  if (!nota) return res.status(404).json({ error: 'Nota não encontrada' });
+  if (titulo !== undefined) nota.titulo = titulo;
+  if (conteudo !== undefined) nota.conteudo = conteudo;
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, notas: data.notas });
+});
+
+app.delete('/api/notas/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const data = await getUserData(req.session.userId);
+  data.notas = (data.notas || []).filter(n => n.id != id);
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, notas: data.notas });
+});
+
+// ── Livros ────────────────────────────────────────────────────────────────────
+app.get('/api/livros', requireAuth, async (req, res) => {
+  const data = await getUserData(req.session.userId);
+  res.json(data.livros || []);
+});
+
+app.post('/api/livros', requireAuth, async (req, res) => {
+  const { titulo, autor, status } = req.body;
+  if (!titulo) return res.status(400).json({ error: 'Título obrigatório' });
+  const data = await getUserData(req.session.userId);
+  if (!data.livros) data.livros = [];
+  data.livros.unshift({
+    id: Date.now(),
+    titulo,
+    autor: autor || '',
+    status: status || 'lendo',
+    data: new Date().toLocaleDateString('pt-BR')
+  });
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, livros: data.livros });
+});
+
+app.patch('/api/livros/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const data = await getUserData(req.session.userId);
+  const livro = (data.livros || []).find(l => l.id == id);
+  if (!livro) return res.status(404).json({ error: 'Livro não encontrado' });
+  if (status) livro.status = status;
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, livros: data.livros });
+});
+
+app.delete('/api/livros/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const data = await getUserData(req.session.userId);
+  data.livros = (data.livros || []).filter(l => l.id != id);
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, livros: data.livros });
+});
+
+// ── Eventos (Calendário) ──────────────────────────────────────────────────────
+app.get('/api/eventos', requireAuth, async (req, res) => {
+  const data = await getUserData(req.session.userId);
+  res.json(data.eventos || {});
+});
+
+app.post('/api/eventos/:chave', requireAuth, async (req, res) => {
+  const { chave } = req.params;
+  const { titulo, hora } = req.body;
+  if (!titulo) return res.status(400).json({ error: 'Título obrigatório' });
+  const data = await getUserData(req.session.userId);
+  if (!data.eventos) data.eventos = {};
+  if (!data.eventos[chave]) data.eventos[chave] = [];
+  data.eventos[chave].push({ id: Date.now(), titulo, hora: hora || '' });
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, eventos: data.eventos });
+});
+
+app.delete('/api/eventos/:chave/:id', requireAuth, async (req, res) => {
+  const { chave, id } = req.params;
+  const data = await getUserData(req.session.userId);
+  if (data.eventos?.[chave]) {
+    data.eventos[chave] = data.eventos[chave].filter(e => e.id != id);
+    if (!data.eventos[chave].length) delete data.eventos[chave];
+  }
+  await saveUserData(req.session.userId, data);
+  res.json({ success: true, eventos: data.eventos });
 });
 
 // ── Fallback to SPA ───────────────────────────────────────────────────────────

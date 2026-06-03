@@ -94,6 +94,22 @@
         <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         <span>Música</span>
       </button>
+      <button class="nav-item" data-module="clima" onclick="switchModule('clima', this)">
+        <svg viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>
+        <span>Clima</span>
+      </button>
+      <button class="nav-item" data-module="notas" onclick="switchModule('notas', this)">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Notas</span>
+      </button>
+      <button class="nav-item" data-module="livros" onclick="switchModule('livros', this)">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Livros</span>
+      </button>
+      <button class="nav-item" data-module="calendario" onclick="switchModule('calendario', this)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Calendário</span>
+      </button>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -145,10 +161,26 @@
           <h3>Música</h3>
           <p id="dash-musicas-info">Carregando...</p>
         </div>
-        <div class="bento-card card-hoje">
+        <div class="bento-card card-clima-dash" onclick="switchModule('clima', document.querySelector('[data-module=clima]'))">
+          <div class="card-icon" id="dash-clima-icon">🌤️</div>
+          <h3>Clima</h3>
+          <p id="dash-clima-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-notas-dash" onclick="switchModule('notas', document.querySelector('[data-module=notas]'))">
+          <div class="card-icon">📝</div>
+          <h3>Notas</h3>
+          <p id="dash-notas-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-livros-dash" onclick="switchModule('livros', document.querySelector('[data-module=livros]'))">
+          <div class="card-icon">📚</div>
+          <h3>Livros</h3>
+          <p id="dash-livros-info">Carregando...</p>
+        </div>
+        <div class="bento-card card-hoje" onclick="switchModule('calendario', document.querySelector('[data-module=calendario]'))" style="cursor:pointer">
           <h3>Hoje</h3>
           <p id="dash-hoje-data" class="date-display"></p>
           <p id="dash-hoje-dia" class="day-display"></p>
+          <p id="dash-hoje-eventos" style="font-size:0.78rem;color:var(--accent);margin-top:0.4rem"></p>
         </div>
       </div>
     </section>
@@ -364,6 +396,153 @@
               <input type="url" id="nova-musica-link" placeholder="https://..." />
             </div>
             <button class="btn-primary full" onclick="addMusica()">Adicionar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CLIMA ── -->
+    <section id="module-clima" class="module hidden">
+      <div class="module-header">
+        <div>
+          <h1>Clima</h1>
+          <p id="clima-cidade-label">Detectando localização...</p>
+        </div>
+        <button class="btn-primary" onclick="loadClima()">🔄 Atualizar</button>
+      </div>
+      <div id="clima-loading" class="clima-loading-state">
+        <div class="clima-spinner"></div>
+        <p>Buscando sua localização...</p>
+      </div>
+      <div id="clima-error" class="hidden">
+        <div class="bento-card" style="text-align:center;padding:2rem">
+          <p style="font-size:2rem;margin-bottom:0.5rem">🌫️</p>
+          <p id="clima-error-msg" style="color:var(--text-sub)">Não foi possível obter o clima.</p>
+          <button class="btn-primary" style="margin-top:1rem" onclick="loadClima()">Tentar novamente</button>
+        </div>
+      </div>
+      <div id="clima-content" class="hidden">
+        <div class="clima-hoje-card bento-card">
+          <div class="clima-hoje-left">
+            <div class="clima-temp-big" id="clima-temp-hoje">--°</div>
+            <div class="clima-desc-hoje" id="clima-desc-hoje">--</div>
+            <div class="clima-feels" id="clima-feels">Sensação: --°</div>
+          </div>
+          <div class="clima-hoje-right">
+            <div class="clima-icon-big" id="clima-icon-hoje">🌤️</div>
+            <div class="clima-hoje-details">
+              <div class="clima-detail"><span>💧</span><span id="clima-umidade">--</span></div>
+              <div class="clima-detail"><span>💨</span><span id="clima-vento">--</span></div>
+              <div class="clima-detail"><span>👁️</span><span id="clima-visib">--</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="clima-forecast-grid" id="clima-forecast"></div>
+      </div>
+    </section>
+
+    <!-- ── NOTAS ── -->
+    <section id="module-notas" class="module hidden">
+      <div class="module-header">
+        <h1>Notas</h1>
+        <button class="btn-primary" onclick="addNota()">+ Nova Nota</button>
+      </div>
+      <div class="notas-layout">
+        <div class="notas-lista" id="notas-lista">
+          <p class="empty-state">Nenhuma nota ainda</p>
+        </div>
+        <div class="nota-editor" id="nota-editor">
+          <div class="nota-editor-vazio">
+            <p>📝</p>
+            <p>Selecione ou crie uma nota</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LIVROS ── -->
+    <section id="module-livros" class="module hidden">
+      <div class="module-header">
+        <h1>Livros</h1>
+        <button class="btn-primary" onclick="openModal('add-livro-modal')">+ Adicionar Livro</button>
+      </div>
+      <div class="livros-tabs">
+        <button class="livro-tab active" data-status="lendo" onclick="setLivroTab('lendo', this)">📖 Lendo</button>
+        <button class="livro-tab" data-status="lido" onclick="setLivroTab('lido', this)">✅ Lidos</button>
+      </div>
+      <div class="bento-grid livros-grid" id="livros-grid"></div>
+
+      <div class="modal-overlay hidden" id="add-livro-modal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Adicionar Livro</h2>
+            <button class="modal-close" onclick="closeModal('add-livro-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="field-group">
+              <label>Título</label>
+              <input type="text" id="livro-titulo" placeholder="Ex: O Alquimista" />
+            </div>
+            <div class="field-group">
+              <label>Autor</label>
+              <input type="text" id="livro-autor" placeholder="Ex: Paulo Coelho" />
+            </div>
+            <div class="field-group">
+              <label>Status</label>
+              <select id="livro-status" style="padding:0.65rem 0.9rem;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.95rem;outline:none;cursor:pointer">
+                <option value="lendo">📖 Lendo</option>
+                <option value="lido">✅ Lido</option>
+              </select>
+            </div>
+            <button class="btn-primary full" onclick="addLivro()">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CALENDÁRIO ── -->
+    <section id="module-calendario" class="module hidden">
+      <div class="module-header">
+        <div>
+          <h1>Calendário</h1>
+          <p id="cal-mes-label">Carregando...</p>
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn-primary" onclick="calNavMes(-1)">‹</button>
+          <button class="btn-primary" onclick="calNavMes(0)">Hoje</button>
+          <button class="btn-primary" onclick="calNavMes(1)">›</button>
+        </div>
+      </div>
+      <div class="cal-grid-wrapper bento-card">
+        <div class="cal-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        </div>
+        <div class="cal-days" id="cal-days"></div>
+      </div>
+      <div id="cal-eventos-hoje" class="bento-card" style="margin-top:1rem;display:none">
+        <div class="modal-header" style="border:none;padding:0 0 0.8rem">
+          <h3 id="cal-eventos-titulo">Eventos</h3>
+          <button class="btn-primary" onclick="openAddEvento()">+ Evento</button>
+        </div>
+        <div id="cal-eventos-lista"></div>
+      </div>
+
+      <div class="modal-overlay hidden" id="add-evento-modal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Novo Evento</h2>
+            <button class="modal-close" onclick="closeModal('add-evento-modal')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="field-group">
+              <label>Título do Evento</label>
+              <input type="text" id="evento-titulo" placeholder="Ex: Consulta médica" />
+            </div>
+            <div class="field-group">
+              <label>Horário (opcional)</label>
+              <input type="time" id="evento-hora" />
+            </div>
+            <button class="btn-primary full" onclick="addEvento()">Salvar Evento</button>
           </div>
         </div>
       </div>
