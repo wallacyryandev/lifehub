@@ -90,10 +90,6 @@
         <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         <span>Finanças</span>
       </button>
-      <button class="nav-item" data-module="musicas" onclick="switchModule('musicas', this)">
-        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        <span>Música</span>
-      </button>
       <button class="nav-item" data-module="clima" onclick="switchModule('clima', this)">
         <svg viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>
         <span>Clima</span>
@@ -155,11 +151,6 @@
           <div class="card-icon">💰</div>
           <h3>Saldo</h3>
           <p id="dash-saldo" class="dash-value">R$ 0,00</p>
-        </div>
-        <div class="bento-card card-musicas-dash" onclick="switchModule('musicas', document.querySelector('[data-module=musicas]'))">
-          <div class="card-icon">🎵</div>
-          <h3>Música</h3>
-          <p id="dash-musicas-info">Carregando...</p>
         </div>
         <div class="bento-card card-clima-dash" onclick="switchModule('clima', document.querySelector('[data-module=clima]'))">
           <div class="card-icon" id="dash-clima-icon">🌤️</div>
@@ -319,88 +310,6 @@
       </div>
     </section>
 
-    <!-- ── MÚSICA ── -->
-    <section id="module-musicas" class="module hidden">
-      <div class="module-header">
-        <h1>Música</h1>
-        <button class="btn-primary" onclick="openAddPlaylistModal()">+ Nova Playlist</button>
-      </div>
-      <div class="musicas-layout">
-        <div class="playlists-panel" id="playlists-panel">
-          <p class="empty-state" id="playlists-empty">Nenhuma playlist ainda</p>
-        </div>
-        <div class="player-panel">
-          <div class="bento-card player-card" id="player-card">
-            <div class="now-playing-art">🎵</div>
-            <div class="now-playing-info">
-              <p class="now-playing-title" id="player-titulo">Nenhuma música</p>
-              <p class="now-playing-sub" id="player-playlist">—</p>
-            </div>
-            <div class="player-controls">
-              <button class="ctrl-btn" id="ctrl-shuffle" onclick="toggleShuffle()" title="Aleatório">
-                <svg viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-              </button>
-              <button class="ctrl-btn" onclick="prevMusica()" title="Anterior">
-                <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-              </button>
-              <button class="ctrl-btn play-btn" id="ctrl-play" onclick="togglePlay()" title="Play/Pause">
-                <svg id="icon-play" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <svg id="icon-pause" viewBox="0 0 24 24" class="hidden"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-              </button>
-              <button class="ctrl-btn" onclick="nextMusica()" title="Próxima">
-                <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-              </button>
-              <button class="ctrl-btn" id="ctrl-order" onclick="toggleOrder()" title="Em ordem">
-                <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-              </button>
-            </div>
-            <div class="player-progress">
-              <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-            </div>
-            <a id="player-link" href="#" target="_blank" class="player-open-link hidden">Abrir link externo ↗</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal Add Playlist -->
-      <div class="modal-overlay hidden" id="add-playlist-modal">
-        <div class="modal modal-sm">
-          <div class="modal-header">
-            <h2>Nova Playlist</h2>
-            <button class="modal-close" onclick="closeModal('add-playlist-modal')">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="field-group">
-              <label>Nome</label>
-              <input type="text" id="nova-playlist-nome" placeholder="Ex: Lo-fi Chill" />
-            </div>
-            <button class="btn-primary full" onclick="addPlaylist()">Criar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal Add Música -->
-      <div class="modal-overlay hidden" id="add-musica-modal">
-        <div class="modal modal-sm">
-          <div class="modal-header">
-            <h2>Adicionar Música</h2>
-            <button class="modal-close" onclick="closeModal('add-musica-modal')">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="field-group">
-              <label>Título</label>
-              <input type="text" id="nova-musica-titulo" placeholder="Nome da música" />
-            </div>
-            <div class="field-group">
-              <label>Link (YouTube, Spotify, etc.)</label>
-              <input type="url" id="nova-musica-link" placeholder="https://..." />
-            </div>
-            <button class="btn-primary full" onclick="addMusica()">Adicionar</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ── CLIMA ── -->
     <section id="module-clima" class="module hidden">
       <div class="module-header">
@@ -469,6 +378,7 @@
       <div class="livros-tabs">
         <button class="livro-tab active" data-status="lendo" onclick="setLivroTab('lendo', this)">📖 Lendo</button>
         <button class="livro-tab" data-status="lido" onclick="setLivroTab('lido', this)">✅ Lidos</button>
+        <button class="livro-tab" data-status="comprar" onclick="setLivroTab('comprar', this)">🛒 Quero Comprar</button>
       </div>
       <div class="bento-grid livros-grid" id="livros-grid"></div>
 
@@ -492,6 +402,7 @@
               <select id="livro-status" style="padding:0.65rem 0.9rem;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.95rem;outline:none;cursor:pointer">
                 <option value="lendo">📖 Lendo</option>
                 <option value="lido">✅ Lido</option>
+                <option value="comprar">🛒 Quero Comprar</option>
               </select>
             </div>
             <button class="btn-primary full" onclick="addLivro()">Salvar</button>

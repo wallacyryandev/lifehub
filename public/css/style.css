@@ -718,10 +718,9 @@ input, button, textarea { font-family: var(--font-body); }
 /* ══════════════════ DASHBOARD — NOVOS CARDS ══════════════════ */
 .dashboard-grid {
   grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
 }
-.card-clima-dash  { grid-column: 1; background: linear-gradient(135deg, var(--surface), rgba(93,224,200,0.08)); }
-.card-notas-dash  { grid-column: 2; }
-.card-livros-dash { grid-column: 3; }
+.card-clima-dash  { background: linear-gradient(135deg, var(--surface), rgba(93,224,200,0.08)); }
 .card-hoje        { grid-column: 1 / 4; }
 
 /* ══════════════════ CLIMA ══════════════════ */
@@ -877,15 +876,15 @@ input, button, textarea { font-family: var(--font-body); }
 .livro-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem; align-items: center; }
 
 /* ══════════════════ CALENDÁRIO ══════════════════ */
-.cal-grid-wrapper { padding: 1.2rem; }
+.cal-grid-wrapper { padding: 1rem; }
 
 .cal-weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem; margin-bottom: 0.5rem;
+  gap: 0.3rem; margin-bottom: 0.4rem;
   text-align: center;
 }
 .cal-weekdays span {
-  font-size: 0.75rem; color: var(--text-dim);
+  font-size: 0.72rem; color: var(--text-dim);
   font-family: var(--font-display); font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em;
   padding: 0.3rem 0;
@@ -897,12 +896,13 @@ input, button, textarea { font-family: var(--font-body); }
 }
 
 .cal-day {
-  aspect-ratio: 1;
+  aspect-ratio: 1 / 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: var(--radius-sm);
   cursor: pointer; transition: all 0.2s;
-  font-size: 0.9rem; position: relative;
+  font-size: 0.88rem; position: relative;
   border: 1px solid transparent;
+  min-height: 0;
 }
 .cal-day:hover { background: var(--surface2); border-color: var(--border); }
 .cal-day.vazio { cursor: default; }
