@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
@@ -29,6 +30,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
+  store: new pgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: 'session'
+  }),
   secret: process.env.SESSION_SECRET || 'lifehub_secret_key_2024',
   resave: false,
   saveUninitialized: false,
