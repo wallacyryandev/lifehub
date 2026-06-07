@@ -346,7 +346,6 @@ function addMateria() {
   renderEstudos();
   renderDashboard();
 }
-{
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('hidden');
 }
@@ -506,10 +505,10 @@ let modalDia = '';
 function openTreinoModal(dia) {
   modalDia = dia;
   document.getElementById('treino-modal-title').textContent = DIAS_LABEL[dia];
-  document.getElementById('treino-exercicio').value = '';
-  document.getElementById('treino-carga').value     = '';
-  document.getElementById('treino-series').value    = '';
-  document.getElementById('treino-reps').value      = '';
+  document.getElementById('ex-nome').value    = '';
+  document.getElementById('ex-carga').value   = '';
+  document.getElementById('ex-series').value  = '';
+  document.getElementById('ex-reps').value    = '';
   renderTreinoModalList();
   openModal('treino-modal');
 }
