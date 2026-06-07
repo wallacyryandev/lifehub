@@ -185,8 +185,6 @@ async function initApp() {
 
   setDashGreeting(nome);
   renderDashboard();
-  renderTreino();
-  renderEstudos();
   renderFinancas();
   renderNotas();
   renderLivros();
@@ -225,7 +223,16 @@ function toggleTreinoSubmenu(btn) {
   const arrow = btn.querySelector('.submenu-arrow');
   sub.classList.toggle('open');
   if (arrow) arrow.style.transform = sub.classList.contains('open') ? 'rotate(180deg)' : '';
-  if (sub.classList.contains('open')) switchModule('treino', btn);
+  if (sub.classList.contains('open')) {
+    switchModule('treino', btn);
+    // Mostrar selector ao abrir o módulo diretamente
+    const sel = document.getElementById('treino-tipo-selector');
+    const ac  = document.getElementById('treino-academia');
+    const tf  = document.getElementById('treino-taf');
+    if (sel) sel.classList.remove('hidden');
+    if (ac)  ac.classList.add('hidden');
+    if (tf)  tf.classList.add('hidden');
+  }
 }
 
 function toggleEstudosSubmenu(btn) {
@@ -233,27 +240,113 @@ function toggleEstudosSubmenu(btn) {
   const arrow = btn.querySelector('.submenu-arrow');
   sub.classList.toggle('open');
   if (arrow) arrow.style.transform = sub.classList.contains('open') ? 'rotate(180deg)' : '';
-  if (sub.classList.contains('open')) switchModule('estudos', btn);
+  if (sub.classList.contains('open')) {
+    switchModule('estudos', btn);
+    // Mostrar selector ao abrir o módulo diretamente
+    const sel = document.getElementById('estudos-categoria-selector');
+    const cnt = document.getElementById('estudos-categoria-content');
+    if (sel) sel.classList.remove('hidden');
+    if (cnt) cnt.classList.add('hidden');
+  }
 }
 
 function switchTreinoTipo(tipo, btn) {
   treinoTipo = tipo;
   document.querySelectorAll('.nav-subitem').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  renderTreino();
   switchModule('treino', document.querySelector('[data-module="treino"]'));
+  renderTreino();
+}
+
+function voltarEstudosSelector() {
+  document.getElementById('estudos-categoria-selector').classList.remove('hidden');
+  document.getElementById('estudos-categoria-content').classList.add('hidden');
+}
+
+function switchEstudosTab(tab, btn) {
+  document.querySelectorAll('.estudos-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('estudos-tab-topicos').classList.toggle('hidden', tab !== 'topicos');
+  document.getElementById('estudos-tab-pdfs').classList.toggle('hidden', tab !== 'pdfs');
+  if (tab === 'pdfs') renderPdfs();
+}
+
+function openAddMateriaModal() {
+  document.getElementById('nova-materia-nome').value = '';
+  openModal('add-materia-modal');
 }
 
 function switchEstudosCategoria(cat, btn) {
   estudosCat = cat;
   document.querySelectorAll('.nav-subitem').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+
+  // Mostrar área de conteúdo
+  document.getElementById('estudos-categoria-selector').classList.add('hidden');
+  document.getElementById('estudos-categoria-content').classList.remove('hidden');
+  document.getElementById('estudos-categoria-titulo').textContent = cat === 'escola' ? '🏫 Escola' : '📋 Concurso';
+
+  // Resetar para aba tópicos
+  document.querySelectorAll('.estudos-tab').forEach(b => b.classList.remove('active'));
+  document.querySelector('.estudos-tab').classList.add('active');
+  document.getElementById('estudos-tab-topicos').classList.remove('hidden');
+  document.getElementById('estudos-tab-pdfs').classList.add('hidden');
+
   renderEstudos();
   switchModule('estudos', document.querySelector('[data-module="estudos"]'));
 }
 
-// Sidebar mobile
-function toggleSidebar() {
+function renderEstudos() {
+  const grid = document.getElementById('estudos-grid');
+  if (!grid) return;
+  const materias = appData.estudos[estudosCat] || [];
+
+  grid.innerHTML = materias.length
+    ? materias.map(m => {
+        const done  = (m.topicos||[]).filter(t=>t.concluido).length;
+        const total = (m.topicos||[]).length;
+        const pct   = total ? Math.round(done/total*100) : 0;
+        return `
+          <div class="bento-card materia-card" id="materia-${m.id}">
+            <div class="materia-header">
+              <h3>${m.nome}</h3>
+              <div class="materia-actions">
+                <span class="pct-badge">${pct}%</span>
+                <button class="btn-icon-del" onclick="delMateria(${m.id})">✕</button>
+              </div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="topicos-list">
+              ${(m.topicos||[]).map(t => `
+                <label class="topico-row">
+                  <input type="checkbox" ${t.concluido?'checked':''} onchange="toggleTopico(${m.id},${t.id},this.checked)" />
+                  <span class="${t.concluido?'concluido':''}">${t.titulo}</span>
+                  <button class="btn-icon-del sm" onclick="event.stopPropagation();delTopico(${m.id},${t.id})">✕</button>
+                </label>`).join('')}
+              ${!total ? '<p class="empty-mini">Nenhum tópico</p>' : ''}
+            </div>
+            <div class="add-topico-row">
+              <input type="text" id="topico-input-${m.id}" placeholder="Novo tópico..." onkeydown="if(event.key==='Enter')addTopico(${m.id})" />
+              <button class="btn-sm" onclick="addTopico(${m.id})">+</button>
+            </div>
+          </div>`;
+      }).join('')
+    : '<p class="empty-state">Nenhuma matéria ainda</p>';
+}
+
+function addMateria() {
+  const inp = document.getElementById('nova-materia-nome');
+  const nome = inp?.value.trim();
+  if (!nome) return;
+  if (!appData.estudos[estudosCat]) appData.estudos[estudosCat] = [];
+  appData.estudos[estudosCat].push({ id: Date.now(), nome, topicos: [] });
+  inp.value = '';
+  closeModal('add-materia-modal');
+  scheduleSave();
+  renderEstudos();
+  renderDashboard();
+}
+{
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('hidden');
 }
@@ -316,9 +409,30 @@ const DIAS_LABEL = {
 };
 
 function renderTreino() {
-  const grid = document.getElementById('treino-grid');
+  if (treinoTipo === 'academia') {
+    renderAcademia();
+  } else {
+    renderTaf();
+  }
+}
+
+function voltarTreinoSelector() {
+  document.getElementById('treino-tipo-selector').classList.remove('hidden');
+  document.getElementById('treino-academia').classList.add('hidden');
+  document.getElementById('treino-taf').classList.add('hidden');
+}
+
+function renderAcademia() {
+  const selector = document.getElementById('treino-tipo-selector');
+  const acadDiv  = document.getElementById('treino-academia');
+  const tafDiv   = document.getElementById('treino-taf');
+  if (selector) selector.classList.add('hidden');
+  if (acadDiv)  acadDiv.classList.remove('hidden');
+  if (tafDiv)   tafDiv.classList.add('hidden');
+
+  const grid = document.getElementById('treino-grid-academia');
   if (!grid) return;
-  const diasMap = appData.treino[treinoTipo] || TEMPLATE.treino.academia;
+  const diasMap = appData.treino.academia || TEMPLATE.treino.academia;
   const hoje = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'][new Date().getDay()];
 
   grid.innerHTML = Object.entries(DIAS_LABEL).map(([key, label]) => {
@@ -339,6 +453,55 @@ function renderTreino() {
   }).join('');
 }
 
+function renderTaf() {
+  const selector = document.getElementById('treino-tipo-selector');
+  const acadDiv  = document.getElementById('treino-academia');
+  const tafDiv   = document.getElementById('treino-taf');
+  if (selector) selector.classList.add('hidden');
+  if (acadDiv)  acadDiv.classList.add('hidden');
+  if (tafDiv)   tafDiv.classList.remove('hidden');
+
+  if (!appData.treino.taf) appData.treino.taf = [];
+  const grid = document.getElementById('taf-grid');
+  if (!grid) return;
+  const registros = Array.isArray(appData.treino.taf) ? appData.treino.taf : [];
+
+  grid.innerHTML = registros.length
+    ? registros.map(r => `
+        <div class="bento-card taf-card">
+          <div class="taf-card-header">
+            <span class="taf-card-data">${r.data || ''}</span>
+            <button class="btn-icon-del" onclick="delTaf(${r.id})">✕</button>
+          </div>
+          <div class="taf-stat"><span class="taf-stat-label">🏃 Corrida 12min</span><span class="taf-stat-val">${r.corrida || '--'} m</span></div>
+          <div class="taf-stat"><span class="taf-stat-label">💪 Flexão</span><span class="taf-stat-val">${r.flexao || '--'} rep</span></div>
+          <div class="taf-stat"><span class="taf-stat-label">🔄 Abdominal</span><span class="taf-stat-val">${r.abdominal || '--'} rep</span></div>
+          ${r.obs ? `<p class="taf-obs">${r.obs}</p>` : ''}
+        </div>`).join('')
+    : '<p class="empty-state" style="grid-column:1/-1">Nenhum registro de TAF ainda.</p>';
+}
+
+function addTaf() {
+  const data     = document.getElementById('taf-data')?.value;
+  const corrida  = document.getElementById('taf-corrida')?.value;
+  const flexao   = document.getElementById('taf-flexao')?.value;
+  const abdominal= document.getElementById('taf-abdominal')?.value;
+  const obs      = document.getElementById('taf-obs')?.value.trim();
+  if (!data) return;
+
+  if (!Array.isArray(appData.treino.taf)) appData.treino.taf = [];
+  appData.treino.taf.unshift({ id: Date.now(), data, corrida, flexao, abdominal, obs });
+  closeModal('add-taf-modal');
+  scheduleSave();
+  renderTaf();
+}
+
+function delTaf(id) {
+  appData.treino.taf = (appData.treino.taf || []).filter(r => r.id != id);
+  scheduleSave();
+  renderTaf();
+}
+
 let modalDia = '';
 function openTreinoModal(dia) {
   modalDia = dia;
@@ -352,14 +515,14 @@ function openTreinoModal(dia) {
 }
 
 function renderTreinoModalList() {
-  const list = document.getElementById('treino-modal-list');
-  const exs  = appData.treino[treinoTipo][modalDia] || [];
+  const list = document.getElementById('exercise-list');
+  const exs  = (appData.treino.academia[modalDia] || []);
   list.innerHTML = exs.length
     ? exs.map(e => `
-        <div class="ex-row">
-          <div>
-            <strong>${e.exercicio}</strong>
-            <span class="ex-meta">${e.carga ? e.carga+'kg · ' : ''}${e.series||''}×${e.reps||''}</span>
+        <div class="exercise-item">
+          <div class="exercise-info">
+            <div class="exercise-name">${e.exercicio}</div>
+            <div class="exercise-details">${e.carga ? e.carga+'kg · ' : ''}${e.series||''}×${e.reps||''}</div>
           </div>
           <button class="btn-icon-del" onclick="delExercicio('${e.id}')">✕</button>
         </div>`).join('')
@@ -369,86 +532,33 @@ function renderTreinoModalList() {
 function addExercicio() {
   const ex = {
     id:        Date.now(),
-    exercicio: document.getElementById('treino-exercicio').value.trim(),
-    carga:     document.getElementById('treino-carga').value,
-    series:    document.getElementById('treino-series').value,
-    reps:      document.getElementById('treino-reps').value,
+    exercicio: document.getElementById('ex-nome').value.trim(),
+    carga:     document.getElementById('ex-carga').value,
+    series:    document.getElementById('ex-series').value,
+    reps:      document.getElementById('ex-reps').value,
     data:      new Date().toLocaleDateString('pt-BR')
   };
   if (!ex.exercicio) return;
 
-  if (!appData.treino[treinoTipo][modalDia]) appData.treino[treinoTipo][modalDia] = [];
-  appData.treino[treinoTipo][modalDia].push(ex);
+  if (!appData.treino.academia[modalDia]) appData.treino.academia[modalDia] = [];
+  appData.treino.academia[modalDia].push(ex);
   scheduleSave();
   renderTreinoModalList();
-  renderTreino();
+  renderAcademia();
   renderDashboard();
 
-  document.getElementById('treino-exercicio').value = '';
-  document.getElementById('treino-carga').value     = '';
-  document.getElementById('treino-series').value    = '';
-  document.getElementById('treino-reps').value      = '';
+  document.getElementById('ex-nome').value    = '';
+  document.getElementById('ex-carga').value   = '';
+  document.getElementById('ex-series').value  = '';
+  document.getElementById('ex-reps').value    = '';
 }
 
 function delExercicio(id) {
-  appData.treino[treinoTipo][modalDia] =
-    (appData.treino[treinoTipo][modalDia] || []).filter(e => e.id != id);
+  appData.treino.academia[modalDia] =
+    (appData.treino.academia[modalDia] || []).filter(e => e.id != id);
   scheduleSave();
   renderTreinoModalList();
-  renderTreino();
-  renderDashboard();
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  ESTUDOS
-// ═══════════════════════════════════════════════════════════════
-function renderEstudos() {
-  const list = document.getElementById('estudos-list');
-  if (!list) return;
-  const materias = appData.estudos[estudosCat] || [];
-
-  list.innerHTML = materias.length
-    ? materias.map(m => {
-        const done  = (m.topicos||[]).filter(t=>t.concluido).length;
-        const total = (m.topicos||[]).length;
-        const pct   = total ? Math.round(done/total*100) : 0;
-        return `
-          <div class="bento-card materia-card" id="materia-${m.id}">
-            <div class="materia-header">
-              <h3>${m.nome}</h3>
-              <div class="materia-actions">
-                <span class="pct-badge">${pct}%</span>
-                <button class="btn-icon-del" onclick="delMateria(${m.id})">✕</button>
-              </div>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-            <div class="topicos-list">
-              ${(m.topicos||[]).map(t => `
-                <label class="topico-row">
-                  <input type="checkbox" ${t.concluido?'checked':''} onchange="toggleTopico(${m.id},${t.id},this.checked)" />
-                  <span class="${t.concluido?'concluido':''}">${t.titulo}</span>
-                  <button class="btn-icon-del sm" onclick="delTopico(${m.id},${t.id})">✕</button>
-                </label>`).join('')}
-              ${!total ? '<p class="empty-mini">Nenhum tópico</p>' : ''}
-            </div>
-            <div class="add-topico-row">
-              <input type="text" id="topico-input-${m.id}" placeholder="Novo tópico..." onkeydown="if(event.key==='Enter')addTopico(${m.id})" />
-              <button class="btn-sm" onclick="addTopico(${m.id})">+</button>
-            </div>
-          </div>`;
-      }).join('')
-    : '<p class="empty-state">Nenhuma matéria ainda</p>';
-}
-
-function addMateria() {
-  const inp = document.getElementById('nova-materia-input');
-  const nome = inp?.value.trim();
-  if (!nome) return;
-  if (!appData.estudos[estudosCat]) appData.estudos[estudosCat] = [];
-  appData.estudos[estudosCat].push({ id: Date.now(), nome, topicos: [] });
-  inp.value = '';
-  scheduleSave();
-  renderEstudos();
+  renderAcademia();
   renderDashboard();
 }
 
@@ -497,7 +607,7 @@ function delTopico(materiaId, topicoId) {
 function renderFinancas() {
   const { saldo, historico } = appData.financas;
 
-  const saldoEl = document.getElementById('fin-saldo');
+  const saldoEl = document.getElementById('saldo-display') || document.getElementById('fin-saldo');
   if (saldoEl) {
     saldoEl.textContent = saldo.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
     saldoEl.className   = 'saldo-valor ' + (saldo >= 0 ? 'positivo' : 'negativo');
@@ -1026,6 +1136,103 @@ async function loadClima() {
     const dashClimaEl = document.getElementById('dash-clima-info');
     if (dashClimaEl) dashClimaEl.textContent = 'Sem dados de clima';
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ESTUDOS — PDFs UI
+// ═══════════════════════════════════════════════════════════════
+let pdfFileAtual = null;
+
+function onPdfFileSelected(input) {
+  pdfFileAtual = input.files[0];
+  const nameEl = document.getElementById('pdf-file-name');
+  if (pdfFileAtual && nameEl) {
+    nameEl.textContent = '📄 ' + pdfFileAtual.name;
+    nameEl.classList.remove('hidden');
+  }
+}
+
+async function uploadPdf() {
+  const materia = document.getElementById('pdf-materia')?.value.trim();
+  const titulo  = document.getElementById('pdf-titulo')?.value.trim();
+  const errEl   = document.getElementById('upload-error');
+  errEl.classList.add('hidden');
+
+  if (!materia || !titulo) { errEl.textContent = 'Preencha matéria e título.'; errEl.classList.remove('hidden'); return; }
+  if (!pdfFileAtual)       { errEl.textContent = 'Selecione um arquivo PDF.'; errEl.classList.remove('hidden'); return; }
+
+  // Garante que a matéria exista em estudos
+  let mat = (appData.estudos[estudosCat]||[]).find(m => m.nome.toLowerCase() === materia.toLowerCase());
+  if (!mat) {
+    mat = { id: Date.now(), nome: materia, topicos: [], pdfs: [] };
+    if (!appData.estudos[estudosCat]) appData.estudos[estudosCat] = [];
+    appData.estudos[estudosCat].push(mat);
+  }
+  if (!mat.pdfs) mat.pdfs = [];
+
+  document.getElementById('upload-progress').classList.remove('hidden');
+  document.getElementById('upload-progress-fill').style.width = '40%';
+
+  const result = await uploadPDF(pdfFileAtual, mat.id);
+  document.getElementById('upload-progress-fill').style.width = '100%';
+
+  if (result) {
+    mat.pdfs.push({ id: Date.now(), titulo, ...result });
+    scheduleSave();
+    renderEstudos();
+    setTimeout(() => {
+      closeModal('add-materia-pdf-modal');
+      document.getElementById('upload-progress').classList.add('hidden');
+      document.getElementById('upload-progress-fill').style.width = '0%';
+      pdfFileAtual = null;
+      document.getElementById('pdf-file-name').classList.add('hidden');
+      document.getElementById('pdf-materia').value = '';
+      document.getElementById('pdf-titulo').value  = '';
+    }, 500);
+  } else {
+    errEl.textContent = 'Erro ao enviar PDF. Tente novamente.';
+    errEl.classList.remove('hidden');
+    document.getElementById('upload-progress').classList.add('hidden');
+  }
+}
+
+function renderPdfs() {
+  const cont = document.getElementById('pdfs-por-materia');
+  if (!cont) return;
+  const materias = (appData.estudos[estudosCat]||[]).filter(m => m.pdfs?.length);
+  if (!materias.length) { cont.innerHTML = '<p class="empty-state">Nenhum PDF ainda. Clique em "+ Nova Matéria / Upload PDF" para começar.</p>'; return; }
+  cont.innerHTML = materias.map(m => `
+    <div class="pdfs-materia-grupo">
+      <div class="pdfs-materia-titulo">${m.nome}</div>
+      <div class="pdfs-lista">
+        ${(m.pdfs||[]).map(p => `
+          <div class="pdf-item" onclick="openPdfViewer('${p.url}','${p.titulo}','${m.nome}')">
+            <span class="pdf-item-icon">📄</span>
+            <div class="pdf-item-info">
+              <div class="pdf-item-titulo">${p.titulo}</div>
+              <div class="pdf-item-meta">${p.nome||''}</div>
+            </div>
+            <span class="pdf-item-arrow">›</span>
+            <button class="btn-icon-del sm" onclick="event.stopPropagation();delPdf(${m.id},${p.id},'${p.path}')">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function openPdfViewer(url, titulo, materia) {
+  document.getElementById('pdf-viewer-titulo').textContent  = titulo;
+  document.getElementById('pdf-viewer-materia').textContent = materia;
+  document.getElementById('pdf-viewer-link').href           = url;
+  document.getElementById('pdf-iframe').src                 = url;
+  openModal('pdf-viewer-modal');
+}
+
+async function delPdf(materiaId, pdfId, path) {
+  const mat = (appData.estudos[estudosCat]||[]).find(m => m.id == materiaId);
+  if (mat) { mat.pdfs = (mat.pdfs||[]).filter(p => p.id != pdfId); }
+  if (path) await deletePDF(path);
+  scheduleSave();
+  renderPdfs();
 }
 
 // ═══════════════════════════════════════════════════════════════

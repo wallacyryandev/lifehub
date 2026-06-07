@@ -902,6 +902,126 @@ input, button, textarea { font-family: var(--font-body); }
 /* ── Utilities ─────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 .empty-state { color: var(--text-dim); font-size: 0.9rem; text-align: center; padding: 1.5rem; }
+.empty-mini  { color: var(--text-dim); font-size: 0.78rem; margin: 0.3rem 0; }
+
+/* Botão deletar */
+.btn-icon-del {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(245, 90, 90, 0.1);
+  border: 1px solid rgba(245, 90, 90, 0.25);
+  border-radius: 8px;
+  color: var(--saida);
+  font-size: 0.75rem;
+  cursor: pointer; flex-shrink: 0;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.btn-icon-del:hover { background: rgba(245, 90, 90, 0.25); border-color: var(--saida); transform: scale(1.05); }
+.btn-icon-del.sm { width: 22px; height: 22px; font-size: 0.65rem; border-radius: 6px; }
+
+/* Botão pequeno */
+.btn-sm {
+  padding: 0.35rem 0.7rem;
+  background: rgba(124,106,245,0.15);
+  border: 1px solid rgba(124,106,245,0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+}
+.btn-sm:hover { background: rgba(124,106,245,0.28); }
+
+/* Badge % e hoje */
+.pct-badge {
+  font-size: 0.72rem; font-weight: 700;
+  background: rgba(124,106,245,0.18);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 0.1rem 0.5rem;
+}
+.hoje-badge {
+  font-size: 0.6rem; font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 20px;
+  padding: 0.1rem 0.4rem;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
+/* Treino chips / exercício */
+.treino-day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.treino-day-name   { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
+.treino-count      { font-size: 0.75rem; color: var(--accent); background: rgba(124,106,245,0.12); border-radius: 20px; padding: 0.1rem 0.5rem; }
+.treino-exs-preview { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ex-chip { font-size: 0.72rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.15rem 0.45rem; color: var(--text-sub); }
+.ex-chip.more { color: var(--accent); border-color: rgba(124,106,245,0.3); }
+
+/* Estudos: tópicos inline */
+.topicos-list   { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.6rem 0; }
+.materia-actions{ display: flex; align-items: center; gap: 0.4rem; }
+.topico-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer; font-size: 0.85rem;
+  transition: background 0.15s;
+}
+.topico-row:hover { background: var(--surface2); }
+.topico-row input[type=checkbox] { accent-color: var(--accent2); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+.topico-row span.concluido { text-decoration: line-through; color: var(--text-dim); flex: 1; }
+.topico-row span:not(.concluido) { flex: 1; }
+.add-topico-row { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+.add-topico-row input {
+  flex: 1; padding: 0.4rem 0.6rem;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-size: 0.82rem; outline: none;
+}
+.add-topico-row input:focus { border-color: var(--accent); }
+
+/* Finanças extras */
+.hist-left  { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
+.hist-right { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.hist-icon  { font-size: 1rem; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
+.historico-item.entrada .hist-icon { background: rgba(62,207,142,0.15); }
+.historico-item.saida   .hist-icon { background: rgba(245,90,90,0.15); }
+
+/* Estudos aba conteúdo PDFs placeholder */
+#pdfs-por-materia { display: flex; flex-direction: column; gap: 1.2rem; }
+
+/* Evento row no calendário */
+.evento-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.evento-row:last-child { border-bottom: none; }
+.evento-hora  { font-size: 0.75rem; color: var(--text-sub); width: 42px; flex-shrink: 0; }
+.evento-titulo{ flex: 1; font-size: 0.9rem; }
+
+/* Musicas */
+.playlists-sidebar { display: flex; flex-direction: column; gap: 0.8rem; }
+.add-playlist-row  { display: flex; gap: 0.4rem; }
+.add-playlist-row input {
+  flex: 1; padding: 0.5rem 0.7rem;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 0.85rem; outline: none;
+}
+.add-playlist-row input:focus { border-color: var(--accent); }
+.playlists-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.playlist-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.55rem 0.8rem; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; font-size: 0.88rem; }
+.playlist-item:hover, .playlist-item.active { border-color: var(--accent); background: rgba(124,106,245,0.1); color: var(--accent); }
+.playlist-detail  { display: flex; flex-direction: column; gap: 0.8rem; }
+.musicas-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.musica-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.8rem; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; font-size: 0.88rem; }
+.musica-row:hover, .musica-row.playing { border-color: var(--accent); background: rgba(124,106,245,0.1); }
+.musica-idx { width: 22px; color: var(--text-dim); font-size: 0.75rem; flex-shrink: 0; text-align: center; }
+.musica-titulo { flex: 1; }
+.musica-atual { text-align: center; }
+.musica-atual-label { font-size: 0.75rem; color: var(--accent2); margin-bottom: 0.2rem; }
+.add-musica-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.add-musica-row input { flex: 1; min-width: 120px; padding: 0.4rem 0.6rem; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 0.82rem; outline: none; }
+.add-musica-row input:focus { border-color: var(--accent); }
+.musicas-container { display: grid; grid-template-columns: 240px 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 700px) { .musicas-container { grid-template-columns: 1fr; } }
 
 /* ══════════════════ CLIMA ══════════════════ */
 .clima-loading-state { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:4rem; color:var(--text-sub); }
