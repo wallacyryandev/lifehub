@@ -1,54 +1,85 @@
-/* ═══════════════════════════════════════════
-   LIFEHUB — Frontend Application Logic
-   Versão com Supabase Storage + Database
-═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   LIFEHUB — Frontend sem servidor
+   Auth: Supabase Auth  |  DB: Supabase direto  |  Storage: Supabase
+   Deploy: Vercel (arquivos estáticos)
+═══════════════════════════════════════════════════════════════ */
 
-// ══════════════════ SUPABASE CONFIG ══════════════════
-// ⚠️  Substitua apenas se mudar de projeto
-const SUPABASE_URL    = 'https://vihscazkhychhlnqtwof.supabase.co';
-const SUPABASE_ANON   = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
-const STORAGE_BUCKET  = 'arquivos-estudos'; // Nome do bucket que você criar no Storage
+// ══════════════════ CONFIG SUPABASE ══════════════════
+const SUPABASE_URL   = 'https://vihscazkhychhlnqtwof.supabase.co';
+const SUPABASE_ANON  = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
+const STORAGE_BUCKET = 'arquivos-estudos';
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ── State ────────────────────────────────────────────────────────────
-let appData = null;
-let currentModule = 'dashboard';
-let treinoCurrentDia = null;
-
-// Estado de treino/estudos
-let treinoTipoAtual      = null; // 'academia' | 'taf'
-let estudosCategoriaAtual = null; // 'escola'  | 'concurso'
-let estudosTabAtual       = 'topicos'; // 'topicos' | 'pdfs'
-
-// Music state
-let musicPlayer = {
-  playlists: [],
-  currentPlaylistIdx: -1,
-  currentSongIdx: -1,
-  playing: false,
-  shuffle: false,
-  order: false,
-  audio: null,
-  progressTimer: null
+// ══════════════════ TEMPLATE padrão ══════════════════
+const TEMPLATE = {
+  treino:   { Segunda: [], Terça: [], Quarta: [], Quinta: [], Sexta: [], Sábado: [], Domingo: [] },
+  taf:      [],
+  estudos:  [],
+  financas: { saldo: 0, historico: [] },
+  musicas:  { playlists: [] },
+  notas:    [],
+  livros:   [],
+  eventos:  {}
 };
 
-// ── API Helpers ──────────────────────────────────────────────────────
-async function api(method, url, body = null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include'
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  return res.json();
+// ══════════════════ STATE ══════════════════
+let appData          = null;
+let currentUser      = null;       // { id, email, user_metadata.nome }
+let currentModule    = 'dashboard';
+let treinoCurrentDia = null;
+let treinoTipoAtual       = null;
+let estudosCategoriaAtual = null;
+let estudosTabAtual       = 'topicos';
+let estudosCurrentMateria = null;
+let notaAtualId      = null;
+let notaAutoSaveTimer= null;
+let livroTabAtual    = 'lendo';
+let calAno  = new Date().getFullYear();
+let calMes  = new Date().getMonth();
+let calDiaSelecionado = null;
+let addMusicaPlaylistId = null;
+let pdfFileAtual = null;
+
+let musicPlayer = {
+  playlists: [], currentPlaylistIdx: -1, currentSongIdx: -1,
+  playing: false, shuffle: false, order: false,
+  audio: null, progressTimer: null
+};
+
+// ══════════════════ SUPABASE — dados do usuário ══════════════════
+async function getUserData(userId) {
+  const { data, error } = await sb
+    .from('dados_usuario')
+    .select('dados')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) console.error('Erro ao buscar dados:', error.message);
+
+  if (!data) {
+    const template = JSON.parse(JSON.stringify(TEMPLATE));
+    const { error: insertError } = await sb
+      .from('dados_usuario')
+      .insert({ user_id: userId, dados: template });
+    if (insertError) console.error('Erro ao criar dados:', insertError.message);
+    return template;
+  }
+  return data.dados;
 }
 
-// ── Init ─────────────────────────────────────────────────────────────
+async function saveUserData(dados) {
+  if (!currentUser) return;
+  const { error } = await sb
+    .from('dados_usuario')
+    .upsert({ user_id: currentUser.id, dados });
+  if (error) console.error('Erro ao salvar:', error.message);
+}
+
+// ══════════════════ INIT ══════════════════
 window.addEventListener('DOMContentLoaded', async () => {
-  // Register auth tab listeners after DOM is ready
+  // Tabs de auth
   document.querySelectorAll('.auth-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
@@ -58,27 +89,42 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Register modal overlay listeners after DOM is ready
+  // Fechar modais clicando no overlay
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
       if (e.target === overlay) overlay.classList.add('hidden');
     });
   });
 
-  try {
-    const me = await api('GET', '/api/me');
-    if (me.userId) {
-      showApp(me.nome);
-      await loadAllData();
-    } else {
-      showAuth();
-    }
-  } catch {
+  // Verificar sessão existente do Supabase Auth
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    currentUser = session.user;
+    const nome = currentUser.user_metadata?.nome || currentUser.email;
+    showApp(nome);
+    await loadAllData();
+  } else {
     showAuth();
   }
+
+  // Escutar mudanças de sessão (login/logout automático)
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      currentUser = session.user;
+      const nome = currentUser.user_metadata?.nome || currentUser.email;
+      showApp(nome);
+      await loadAllData();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      appData = null;
+      showAuth();
+    }
+  });
+
   updateDashDate();
 });
 
+// ══════════════════ AUTH — UI ══════════════════
 function showAuth() {
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
@@ -102,18 +148,18 @@ function updateGreeting(nome) {
 
 function updateDashDate() {
   const now = new Date();
-  const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const dias  = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   document.getElementById('dash-hoje-data').textContent =
     `${now.getDate()} ${meses[now.getMonth()]} ${now.getFullYear()}`;
   document.getElementById('dash-hoje-dia').textContent = dias[now.getDay()];
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────
+// ══════════════════ AUTH — Login / Register / Logout ══════════════════
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const activeForm = document.querySelector('.auth-form.active');
-    if (activeForm?.id === 'tab-login') doLogin();
+    if (activeForm?.id === 'tab-login')    doLogin();
     if (activeForm?.id === 'tab-register') doRegister();
   }
 });
@@ -123,10 +169,22 @@ async function doLogin() {
   const senha = document.getElementById('login-senha').value;
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  if (!email || !senha) { errEl.textContent = 'Preencha e-mail e senha.'; return errEl.classList.remove('hidden'); }
-  const res = await api('POST', '/api/login', { email, senha });
-  if (res.error) { errEl.textContent = res.error; errEl.classList.remove('hidden'); }
-  else { showApp(res.nome); await loadAllData(); }
+
+  if (!email || !senha) {
+    errEl.textContent = 'Preencha e-mail e senha.';
+    return errEl.classList.remove('hidden');
+  }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+
+  if (error) {
+    errEl.textContent = error.message === 'Invalid login credentials'
+      ? 'E-mail ou senha inválidos.'
+      : error.message;
+    return errEl.classList.remove('hidden');
+  }
+
+  // onAuthStateChange cuida do restante
 }
 
 async function doRegister() {
@@ -135,25 +193,49 @@ async function doRegister() {
   const senha = document.getElementById('reg-senha').value;
   const errEl = document.getElementById('reg-error');
   errEl.classList.add('hidden');
-  if (!nome || !email || !senha) { errEl.textContent = 'Preencha todos os campos.'; return errEl.classList.remove('hidden'); }
-  const res = await api('POST', '/api/register', { nome, email, senha });
-  if (res.error) { errEl.textContent = res.error; errEl.classList.remove('hidden'); }
-  else { showApp(res.nome); await loadAllData(); }
+
+  if (!nome || !email || !senha) {
+    errEl.textContent = 'Preencha todos os campos.';
+    return errEl.classList.remove('hidden');
+  }
+
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: senha,
+    options: { data: { nome } }
+  });
+
+  if (error) {
+    errEl.textContent = error.message;
+    return errEl.classList.remove('hidden');
+  }
+
+  // Se o projeto exige confirmação de e-mail, avisar:
+  if (data.user && !data.session) {
+    errEl.style.color = 'var(--accent2)';
+    errEl.textContent = '✅ Cadastro realizado! Verifique seu e-mail para confirmar a conta.';
+    errEl.classList.remove('hidden');
+  }
+  // Se confirmação desativada, onAuthStateChange faz o login automático
 }
 
 async function doLogout() {
-  await api('POST', '/api/logout');
-  appData = null;
-  showAuth();
+  await sb.auth.signOut();
+  // onAuthStateChange cuida do restante
 }
 
-// ── Load All Data ─────────────────────────────────────────────────────
+// ══════════════════ LOAD ALL DATA ══════════════════
 async function loadAllData() {
-  appData = await api('GET', '/api/data');
+  if (!currentUser) return;
+  appData = await getUserData(currentUser.id);
+
+  // Garantir campos
   if (!appData.notas)   appData.notas   = [];
   if (!appData.livros)  appData.livros  = [];
   if (!appData.eventos) appData.eventos = {};
   if (!appData.taf)     appData.taf     = [];
+  if (!appData.treino)  appData.treino  = JSON.parse(JSON.stringify(TEMPLATE.treino));
+
   renderDashboard();
   renderTreino();
   renderEstudos();
@@ -161,7 +243,12 @@ async function loadAllData() {
   renderMusicas();
 }
 
-// ── Module Navigation ─────────────────────────────────────────────────
+// ══════════════════ SAVE helper ══════════════════
+async function save() {
+  await saveUserData(appData);
+}
+
+// ══════════════════ NAVEGAÇÃO ══════════════════
 function switchModule(name, btn) {
   document.querySelectorAll('.module').forEach(m => { m.classList.add('hidden'); m.classList.remove('active'); });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -170,10 +257,13 @@ function switchModule(name, btn) {
   if (section) { section.classList.remove('hidden'); section.classList.add('active'); }
   if (btn) btn.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', treino:'Treino', estudos:'Estudos', financas:'Finanças', musicas:'Música', clima:'Clima', notas:'Notas', livros:'Livros', calendario:'Calendário' };
-  if (name === 'clima')     loadClima();
-  if (name === 'notas')     renderNotas();
-  if (name === 'livros')    renderLivros();
+  const titles = { dashboard:'Dashboard', treino:'Treino', estudos:'Estudos',
+    financas:'Finanças', musicas:'Música', clima:'Clima',
+    notas:'Notas', livros:'Livros', calendario:'Calendário' };
+
+  if (name === 'clima')      loadClima();
+  if (name === 'notas')      renderNotas();
+  if (name === 'livros')     renderLivros();
   if (name === 'calendario') renderCalendario();
   document.getElementById('topbar-title').textContent = titles[name] || name;
 
@@ -191,8 +281,7 @@ function closeSidebar() {
   document.getElementById('sidebar-overlay').classList.add('hidden');
 }
 
-// ── Modal Helpers ─────────────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
 // ══════════════════ DASHBOARD ══════════════════
@@ -204,7 +293,7 @@ function renderDashboard() {
   document.getElementById('dash-treino-info').textContent =
     treinoHoje.length ? `${treinoHoje.length} exercício(s) hoje` : 'Nenhum treino hoje';
 
-  const mats = appData.estudos || [];
+  const mats     = appData.estudos || [];
   const totalTop = mats.reduce((a, m) => a + m.topicos.length, 0);
   const doneTop  = mats.reduce((a, m) => a + m.topicos.filter(t => t.concluido).length, 0);
   document.getElementById('dash-estudos-info').textContent =
@@ -213,23 +302,27 @@ function renderDashboard() {
   const saldo = appData.financas?.saldo || 0;
   document.getElementById('dash-saldo').textContent = formatMoney(saldo);
 
-  const pls = appData.musicas?.playlists || [];
+  const pls        = appData.musicas?.playlists || [];
   const totalSongs = pls.reduce((a, p) => a + p.musicas.length, 0);
-  const dashMusEl = document.getElementById('dash-musicas-info');
-  if (dashMusEl) dashMusEl.textContent = pls.length ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
+  const dashMusEl  = document.getElementById('dash-musicas-info');
+  if (dashMusEl) dashMusEl.textContent = pls.length
+    ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
 
-  const notas = getNotas();
-  document.getElementById('dash-notas-info').textContent = notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
+  const notas = appData.notas || [];
+  document.getElementById('dash-notas-info').textContent =
+    notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
 
-  const livros = getLivros();
-  const lendo = livros.filter(l => l.status === 'lendo').length;
-  const lidos = livros.filter(l => l.status === 'lido').length;
-  document.getElementById('dash-livros-info').textContent = livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
+  const livros = appData.livros || [];
+  const lendo  = livros.filter(l => l.status === 'lendo').length;
+  const lidos  = livros.filter(l => l.status === 'lido').length;
+  document.getElementById('dash-livros-info').textContent =
+    livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
 
-  const hoje2 = new Date();
+  const hoje2    = new Date();
   const chaveHoje = `${hoje2.getFullYear()}-${hoje2.getMonth()}-${hoje2.getDate()}`;
-  const eventos = getEventos()[chaveHoje] || [];
-  document.getElementById('dash-hoje-eventos').textContent = eventos.length ? `📅 ${eventos.length} evento(s) hoje` : '';
+  const eventos  = (appData.eventos || {})[chaveHoje] || [];
+  document.getElementById('dash-hoje-eventos').textContent =
+    eventos.length ? `📅 ${eventos.length} evento(s) hoje` : '';
 }
 
 // ══════════════════ TREINO ══════════════════
@@ -283,7 +376,7 @@ function renderTreinoAcademia() {
   const hoje = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date().getDay()];
   grid.innerHTML = diasSemana.map(dia => {
     const exercicios = appData?.treino?.[dia] || [];
-    const isHoje = dia === hoje;
+    const isHoje  = dia === hoje;
     const preview = exercicios[0]?.nome || 'Clique para adicionar';
     return `
       <div class="bento-card treino-day-card ${isHoje ? 'hoje' : ''}" onclick="openTreinoModal('${dia}')">
@@ -302,7 +395,7 @@ function openTreinoModal(dia) {
 }
 
 function renderExerciseList(dia) {
-  const list = document.getElementById('exercise-list');
+  const list       = document.getElementById('exercise-list');
   const exercicios = appData?.treino?.[dia] || [];
   if (!exercicios.length) { list.innerHTML = '<p class="empty-state">Nenhum exercício registrado</p>'; return; }
   list.innerHTML = exercicios.map(ex => `
@@ -321,32 +414,36 @@ async function addExercicio() {
   const series = document.getElementById('ex-series').value;
   const reps   = document.getElementById('ex-reps').value;
   if (!nome || !series || !reps) return alert('Preencha exercício, séries e repetições.');
-  const res = await api('POST', `/api/treino/${treinoCurrentDia}`, { nome, carga: carga || 0, series, reps });
-  if (res.success) {
-    appData.treino = res.treino;
-    renderExerciseList(treinoCurrentDia);
-    renderTreinoAcademia();
-    renderDashboard();
-    document.getElementById('ex-nome').value = '';
-    document.getElementById('ex-carga').value = '';
-    document.getElementById('ex-series').value = '';
-    document.getElementById('ex-reps').value = '';
-  }
+
+  if (!appData.treino[treinoCurrentDia]) appData.treino[treinoCurrentDia] = [];
+  const exercicio = {
+    id:   Date.now(),
+    nome, series, reps,
+    carga: carga || 0,
+    data:  new Date().toLocaleDateString('pt-BR')
+  };
+  appData.treino[treinoCurrentDia].push(exercicio);
+  await save();
+  renderExerciseList(treinoCurrentDia);
+  renderTreinoAcademia();
+  renderDashboard();
+  document.getElementById('ex-nome').value   = '';
+  document.getElementById('ex-carga').value  = '';
+  document.getElementById('ex-series').value = '';
+  document.getElementById('ex-reps').value   = '';
 }
 
 async function deleteExercicio(dia, id) {
-  const res = await api('DELETE', `/api/treino/${dia}/${id}`);
-  if (res.success) {
-    appData.treino[dia] = appData.treino[dia].filter(e => e.id != id);
-    renderExerciseList(dia);
-    renderTreinoAcademia();
-    renderDashboard();
-  }
+  appData.treino[dia] = (appData.treino[dia] || []).filter(e => e.id != id);
+  await save();
+  renderExerciseList(dia);
+  renderTreinoAcademia();
+  renderDashboard();
 }
 
-// ── TAF ────────────────────────────────────────────────────────────────
+// ── TAF ──────────────────────────────────────────────
 function renderTaf() {
-  const grid = document.getElementById('taf-grid');
+  const grid      = document.getElementById('taf-grid');
   const registros = appData?.taf || [];
   if (!registros.length) {
     grid.innerHTML = '<p class="empty-state" style="grid-column:1/-1">Nenhum registro de TAF ainda. Clique em "+ Novo Registro".</p>';
@@ -379,28 +476,31 @@ async function addTaf() {
   const abdominal = document.getElementById('taf-abdominal').value;
   const obs       = document.getElementById('taf-obs').value.trim();
   if (!data) return alert('Informe a data do TAF.');
-  const res = await api('POST', '/api/taf', { data, corrida: corrida || null, flexao: flexao || null, abdominal: abdominal || null, obs });
-  if (res.success) {
-    appData.taf = res.taf;
-    renderTaf();
-    closeModal('add-taf-modal');
-    document.getElementById('taf-data').value = '';
-    document.getElementById('taf-corrida').value = '';
-    document.getElementById('taf-flexao').value = '';
-    document.getElementById('taf-abdominal').value = '';
-    document.getElementById('taf-obs').value = '';
-  }
+
+  if (!appData.taf) appData.taf = [];
+  appData.taf.push({
+    id: Date.now(), data,
+    corrida:   corrida   || null,
+    flexao:    flexao    || null,
+    abdominal: abdominal || null,
+    obs
+  });
+  await save();
+  renderTaf();
+  closeModal('add-taf-modal');
+  ['taf-data','taf-corrida','taf-flexao','taf-abdominal','taf-obs'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
 }
 
 async function deleteTaf(id) {
   if (!confirm('Remover este registro TAF?')) return;
-  const res = await api('DELETE', `/api/taf/${id}`);
-  if (res.success) { appData.taf = appData.taf.filter(r => r.id != id); renderTaf(); }
+  appData.taf = appData.taf.filter(r => r.id != id);
+  await save();
+  renderTaf();
 }
 
 // ══════════════════ ESTUDOS ══════════════════
-let estudosCurrentMateria = null;
-
 function toggleEstudosSubmenu(btn) {
   const submenu = document.getElementById('estudos-submenu');
   const isOpen  = submenu.classList.contains('open');
@@ -482,14 +582,20 @@ function openAddMateriaModal() {
 async function addMateria() {
   const nome = document.getElementById('nova-materia-nome').value.trim();
   if (!nome) return;
-  const res = await api('POST', '/api/estudos/materia', { nome });
-  if (res.success) { appData.estudos = res.estudos; renderEstudos(); renderDashboard(); closeModal('add-materia-modal'); }
+  if (!appData.estudos) appData.estudos = [];
+  appData.estudos.push({ id: Date.now(), nome, topicos: [] });
+  await save();
+  renderEstudos();
+  renderDashboard();
+  closeModal('add-materia-modal');
 }
 
 async function deleteMateria(id) {
   if (!confirm('Remover esta matéria e todos os tópicos?')) return;
-  const res = await api('DELETE', `/api/estudos/${id}`);
-  if (res.success) { appData.estudos = appData.estudos.filter(m => m.id != id); renderEstudos(); renderDashboard(); }
+  appData.estudos = appData.estudos.filter(m => m.id != id);
+  await save();
+  renderEstudos();
+  renderDashboard();
 }
 
 function openMateriaModal(materiaId) {
@@ -515,39 +621,38 @@ function renderTopicoList(mat) {
 async function addTopico() {
   const titulo = document.getElementById('topico-titulo').value.trim();
   if (!titulo || !estudosCurrentMateria) return;
-  const res = await api('POST', `/api/estudos/${estudosCurrentMateria}/topico`, { titulo });
-  if (res.success) {
-    appData.estudos = res.estudos;
-    const mat = appData.estudos.find(m => m.id == estudosCurrentMateria);
-    renderTopicoList(mat);
-    renderEstudos();
-    renderDashboard();
-    document.getElementById('topico-titulo').value = '';
-  }
+  const mat = appData.estudos.find(m => m.id == estudosCurrentMateria);
+  if (!mat) return;
+  mat.topicos.push({ id: Date.now(), titulo, concluido: false });
+  await save();
+  renderTopicoList(mat);
+  renderEstudos();
+  renderDashboard();
+  document.getElementById('topico-titulo').value = '';
 }
 
 async function toggleTopico(materiaId, topicoId) {
   const mat = appData.estudos.find(m => m.id == materiaId);
   const top = mat?.topicos.find(t => t.id == topicoId);
   if (!top) return;
-  const res = await api('PATCH', `/api/estudos/${materiaId}/topico/${topicoId}`, { concluido: !top.concluido });
-  if (res.success) { top.concluido = !top.concluido; renderTopicoList(mat); renderEstudos(); renderDashboard(); }
+  top.concluido = !top.concluido;
+  await save();
+  renderTopicoList(mat);
+  renderEstudos();
+  renderDashboard();
 }
 
 async function deleteTopico(materiaId, topicoId) {
-  const res = await api('DELETE', `/api/estudos/${materiaId}/topico/${topicoId}`);
-  if (res.success) {
-    const mat = appData.estudos.find(m => m.id == materiaId);
-    mat.topicos = mat.topicos.filter(t => t.id != topicoId);
-    renderTopicoList(mat);
-    renderEstudos();
-    renderDashboard();
-  }
+  const mat = appData.estudos.find(m => m.id == materiaId);
+  if (!mat) return;
+  mat.topicos = mat.topicos.filter(t => t.id != topicoId);
+  await save();
+  renderTopicoList(mat);
+  renderEstudos();
+  renderDashboard();
 }
 
 // ══════════════════ ESTUDOS — PDFs ══════════════════
-let pdfFileAtual = null;
-
 function onPdfFileSelected(input) {
   const file = input.files[0];
   if (!file) return;
@@ -563,29 +668,40 @@ async function uploadPdf() {
   const titulo  = document.getElementById('pdf-titulo').value.trim();
   const errEl   = document.getElementById('upload-error');
   errEl.classList.add('hidden');
+
   if (!materia) { errEl.textContent = 'Informe o nome da matéria.'; return errEl.classList.remove('hidden'); }
   if (!titulo)  { errEl.textContent = 'Informe o título da aula.';  return errEl.classList.remove('hidden'); }
   if (!pdfFileAtual) { errEl.textContent = 'Selecione um arquivo PDF.'; return errEl.classList.remove('hidden'); }
+
   const categoria = estudosCategoriaAtual || 'escola';
-  const ext   = pdfFileAtual.name.split('.').pop();
-  const slug  = `${categoria}/${materia.toLowerCase().replace(/\s+/g, '-')}/${Date.now()}.${ext}`;
+  const ext  = pdfFileAtual.name.split('.').pop();
+  const slug = `${categoria}/${materia.toLowerCase().replace(/\s+/g, '-')}/${Date.now()}.${ext}`;
+
   document.getElementById('upload-progress').classList.remove('hidden');
   document.getElementById('upload-progress-fill').style.width = '30%';
   document.getElementById('upload-progress-text').textContent = 'Enviando para o Storage...';
   document.getElementById('btn-upload-pdf').disabled = true;
+
   try {
-    const { data: storageData, error: storageErr } = await sb.storage
+    const { error: storageErr } = await sb.storage
       .from(STORAGE_BUCKET)
       .upload(slug, pdfFileAtual, { contentType: 'application/pdf', upsert: false });
     if (storageErr) throw new Error('Erro no Storage: ' + storageErr.message);
+
     document.getElementById('upload-progress-fill').style.width = '65%';
     document.getElementById('upload-progress-text').textContent = 'Obtendo URL pública...';
+
     const { data: urlData } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(slug);
     const urlPdf = urlData.publicUrl;
+
     document.getElementById('upload-progress-fill').style.width = '85%';
     document.getElementById('upload-progress-text').textContent = 'Salvando no banco de dados...';
-    const { error: dbErr } = await sb.from('materiais_estudo').insert({ tipo: categoria, materia, titulo_aula: titulo, url_pdf: urlPdf });
-    if (dbErr) throw new Error('Erro no banco de dados: ' + dbErr.message);
+
+    const { error: dbErr } = await sb
+      .from('materiais_estudo')
+      .insert({ tipo: categoria, materia, titulo_aula: titulo, url_pdf: urlPdf, user_id: currentUser.id });
+    if (dbErr) throw new Error('Erro no banco: ' + dbErr.message);
+
     document.getElementById('upload-progress-fill').style.width = '100%';
     document.getElementById('upload-progress-text').textContent = '✅ Enviado com sucesso!';
     setTimeout(() => { closeModal('add-materia-pdf-modal'); resetUploadForm(); if (estudosTabAtual === 'pdfs') carregarPdfs(); }, 900);
@@ -599,8 +715,7 @@ async function uploadPdf() {
 
 function resetUploadForm() {
   pdfFileAtual = null;
-  document.getElementById('pdf-materia').value = '';
-  document.getElementById('pdf-titulo').value = '';
+  ['pdf-materia','pdf-titulo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pdf-file-input').value = '';
   document.getElementById('pdf-file-name').classList.add('hidden');
   document.getElementById('upload-progress').classList.add('hidden');
@@ -611,20 +726,34 @@ function resetUploadForm() {
 }
 
 async function carregarPdfs() {
-  if (!estudosCategoriaAtual) return;
-  const loadingEl = document.getElementById('pdfs-loading');
-  const container = document.getElementById('pdfs-por-materia');
+  if (!estudosCategoriaAtual || !currentUser) return;
+  const loadingEl  = document.getElementById('pdfs-loading');
+  const container  = document.getElementById('pdfs-por-materia');
   loadingEl.classList.remove('hidden');
   container.innerHTML = '';
+
   try {
-    const { data, error } = await sb.from('materiais_estudo').select('*').eq('tipo', estudosCategoriaAtual).order('materia', { ascending: true }).order('created_at', { ascending: false });
+    const { data, error } = await sb
+      .from('materiais_estudo')
+      .select('*')
+      .eq('tipo', estudosCategoriaAtual)
+      .eq('user_id', currentUser.id)
+      .order('materia', { ascending: true })
+      .order('created_at', { ascending: false });
+
     loadingEl.classList.add('hidden');
     if (error) throw error;
     if (!data || !data.length) { container.innerHTML = '<p class="empty-state">Nenhum PDF enviado ainda.</p>'; return; }
+
     const grupos = {};
-    data.forEach(item => { if (!grupos[item.materia]) grupos[item.materia] = []; grupos[item.materia].push(item); });
+    data.forEach(item => {
+      if (!grupos[item.materia]) grupos[item.materia] = [];
+      grupos[item.materia].push(item);
+    });
+
     const datalist = document.getElementById('pdf-materias-list');
-    datalist.innerHTML = Object.keys(grupos).map(m => `<option value="${m}">`).join('');
+    if (datalist) datalist.innerHTML = Object.keys(grupos).map(m => `<option value="${m}">`).join('');
+
     container.innerHTML = Object.entries(grupos).map(([materia, itens]) => `
       <div class="pdfs-materia-grupo">
         <div class="pdfs-materia-titulo">📂 ${materia} <span style="font-size:0.75rem;color:var(--text-dim);font-weight:400">(${itens.length} arquivo${itens.length > 1 ? 's' : ''})</span></div>
@@ -677,13 +806,16 @@ function formatarDataISO(isoStr) {
 }
 
 // ══════════════════ FINANÇAS ══════════════════
-function formatMoney(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0); }
+function formatMoney(v) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+}
 
 function renderFinancas() {
-  const fin = appData?.financas || { saldo: 0, historico: [] };
+  const fin    = appData?.financas || { saldo: 0, historico: [] };
   const saldoEl = document.getElementById('saldo-display');
   saldoEl.textContent = formatMoney(fin.saldo);
-  saldoEl.className = 'saldo-valor' + (fin.saldo < 0 ? ' negativo' : '');
+  saldoEl.className   = 'saldo-valor' + (fin.saldo < 0 ? ' negativo' : '');
+
   const list = document.getElementById('historico-list');
   if (!fin.historico.length) { list.innerHTML = '<p class="empty-state">Nenhuma transação ainda</p>'; return; }
   list.innerHTML = fin.historico.map(item => `
@@ -702,30 +834,44 @@ async function addTransacao(tipo) {
   const valor     = parseFloat(document.getElementById('fin-valor').value);
   const descricao = document.getElementById('fin-descricao').value.trim();
   if (!valor || valor <= 0) return alert('Informe um valor válido.');
-  const res = await api('POST', '/api/financas', { tipo, valor, descricao });
-  if (res.success) {
-    appData.financas = res.financas;
-    renderFinancas();
-    renderDashboard();
-    document.getElementById('fin-valor').value = '';
-    document.getElementById('fin-descricao').value = '';
-  }
+
+  if (!appData.financas) appData.financas = { saldo: 0, historico: [] };
+  const v = valor;
+  appData.financas.saldo += tipo === 'entrada' ? v : -v;
+  appData.financas.historico.unshift({
+    id:       Date.now(),
+    tipo, valor: v, descricao,
+    data: new Date().toLocaleDateString('pt-BR'),
+    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  });
+  await save();
+  renderFinancas();
+  renderDashboard();
+  document.getElementById('fin-valor').value    = '';
+  document.getElementById('fin-descricao').value = '';
 }
 
 async function deleteTransacao(id) {
-  const res = await api('DELETE', `/api/financas/${id}`);
-  if (res.success) { appData.financas = res.financas; renderFinancas(); renderDashboard(); }
+  const item = appData.financas.historico.find(h => h.id == id);
+  if (item) {
+    appData.financas.saldo -= item.tipo === 'entrada' ? item.valor : -item.valor;
+    appData.financas.historico = appData.financas.historico.filter(h => h.id != id);
+  }
+  await save();
+  renderFinancas();
+  renderDashboard();
 }
 
 // ══════════════════ MÚSICA ══════════════════
-let addMusicaPlaylistId = null;
-
 function renderMusicas() {
-  const data = appData?.musicas || { playlists: [] };
+  const data  = appData?.musicas || { playlists: [] };
   musicPlayer.playlists = data.playlists;
   const panel = document.getElementById('playlists-panel');
   if (!panel) return;
-  if (!data.playlists.length) { panel.innerHTML = '<p class="empty-state" id="playlists-empty">Nenhuma playlist ainda. Crie a primeira!</p>'; return; }
+  if (!data.playlists.length) {
+    panel.innerHTML = '<p class="empty-state" id="playlists-empty">Nenhuma playlist ainda. Crie a primeira!</p>';
+    return;
+  }
   panel.innerHTML = data.playlists.map((pl, pIdx) => `
     <div class="playlist-card">
       <div class="playlist-header">
@@ -748,46 +894,65 @@ function renderMusicas() {
     </div>`).join('');
 }
 
-function isPlayingThisSong(pIdx, mIdx) { return musicPlayer.playing && musicPlayer.currentPlaylistIdx === pIdx && musicPlayer.currentSongIdx === mIdx; }
+function isPlayingThisSong(pIdx, mIdx) {
+  return musicPlayer.playing && musicPlayer.currentPlaylistIdx === pIdx && musicPlayer.currentSongIdx === mIdx;
+}
+
 function openAddPlaylistModal() { document.getElementById('nova-playlist-nome').value = ''; openModal('add-playlist-modal'); }
 
 async function addPlaylist() {
   const nome = document.getElementById('nova-playlist-nome').value.trim();
   if (!nome) return;
-  const res = await api('POST', '/api/musicas/playlist', { nome });
-  if (res.success) { appData.musicas = res.musicas; renderMusicas(); renderDashboard(); closeModal('add-playlist-modal'); }
+  if (!appData.musicas) appData.musicas = { playlists: [] };
+  appData.musicas.playlists.push({ id: Date.now(), nome, musicas: [] });
+  await save();
+  renderMusicas();
+  renderDashboard();
+  closeModal('add-playlist-modal');
 }
 
 async function deletePlaylist(id) {
   if (!confirm('Remover esta playlist?')) return;
-  const res = await api('DELETE', `/api/musicas/playlist/${id}`);
-  if (res.success) { appData.musicas.playlists = appData.musicas.playlists.filter(p => p.id != id); musicPlayer.playlists = appData.musicas.playlists; renderMusicas(); renderDashboard(); }
+  appData.musicas.playlists = appData.musicas.playlists.filter(p => p.id != id);
+  musicPlayer.playlists = appData.musicas.playlists;
+  await save();
+  renderMusicas();
+  renderDashboard();
 }
 
-function openAddMusicaModal(playlistId) { addMusicaPlaylistId = playlistId; document.getElementById('nova-musica-titulo').value = ''; document.getElementById('nova-musica-link').value = ''; openModal('add-musica-modal'); }
+function openAddMusicaModal(playlistId) {
+  addMusicaPlaylistId = playlistId;
+  document.getElementById('nova-musica-titulo').value = '';
+  document.getElementById('nova-musica-link').value   = '';
+  openModal('add-musica-modal');
+}
 
 async function addMusica() {
   const titulo = document.getElementById('nova-musica-titulo').value.trim();
   const link   = document.getElementById('nova-musica-link').value.trim();
   if (!titulo) return alert('Informe o título da música.');
-  const res = await api('POST', `/api/musicas/playlist/${addMusicaPlaylistId}/musica`, { titulo, link });
-  if (res.success) { appData.musicas = res.musicas; musicPlayer.playlists = appData.musicas.playlists; renderMusicas(); renderDashboard(); closeModal('add-musica-modal'); }
+  const pl = appData.musicas.playlists.find(p => p.id == addMusicaPlaylistId);
+  if (!pl) return;
+  pl.musicas.push({ id: Date.now(), titulo, link });
+  musicPlayer.playlists = appData.musicas.playlists;
+  await save();
+  renderMusicas();
+  renderDashboard();
+  closeModal('add-musica-modal');
 }
 
 async function deleteSong(playlistId, musicaId) {
-  const res = await api('DELETE', `/api/musicas/playlist/${playlistId}/musica/${musicaId}`);
-  if (res.success) {
-    const pl = appData.musicas.playlists.find(p => p.id == playlistId);
-    if (pl) pl.musicas = pl.musicas.filter(m => m.id != musicaId);
-    musicPlayer.playlists = appData.musicas.playlists;
-    renderMusicas();
-    renderDashboard();
-  }
+  const pl = appData.musicas.playlists.find(p => p.id == playlistId);
+  if (pl) pl.musicas = pl.musicas.filter(m => m.id != musicaId);
+  musicPlayer.playlists = appData.musicas.playlists;
+  await save();
+  renderMusicas();
+  renderDashboard();
 }
 
 function isDirectAudioLink(url) {
   if (!url) return false;
-  try { const pathname = new URL(url).pathname.toLowerCase(); return /\.(mp3|ogg|wav|aac|flac|m4a|opus|webm)(\?.*)?$/.test(pathname); } catch { return false; }
+  try { const p = new URL(url).pathname.toLowerCase(); return /\.(mp3|ogg|wav|aac|flac|m4a|opus|webm)(\?.*)?$/.test(p); } catch { return false; }
 }
 
 function stopCurrentAudio() {
@@ -807,11 +972,19 @@ function playSong(playlistIdx, songIdx) {
     const audio = new Audio(song.link);
     audio.crossOrigin = 'anonymous';
     musicPlayer.audio = audio;
-    audio.addEventListener('timeupdate', () => { if (audio.duration) { const pct = (audio.currentTime / audio.duration) * 100; const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = pct + '%'; } });
+    audio.addEventListener('timeupdate', () => {
+      if (audio.duration) {
+        const pct = (audio.currentTime / audio.duration) * 100;
+        const pf  = document.getElementById('progress-fill');
+        if (pf) pf.style.width = pct + '%';
+      }
+    });
     audio.addEventListener('ended', () => { nextMusica(); });
     audio.addEventListener('error', () => { updatePlayerUI(); });
     audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); renderMusicas(); });
-  } else if (song.link) { startProgressSimulation(); }
+  } else if (song.link) {
+    startProgressSimulation();
+  }
   updatePlayerUI();
   renderMusicas();
 }
@@ -832,12 +1005,12 @@ function startProgressSimulation() {
 function updatePlayerUI() {
   const pl   = musicPlayer.playlists[musicPlayer.currentPlaylistIdx];
   const song = pl?.musicas[musicPlayer.currentSongIdx];
-  const tituloEl = document.getElementById('player-titulo');
+  const tituloEl   = document.getElementById('player-titulo');
   const playlistEl = document.getElementById('player-playlist');
   if (tituloEl)   tituloEl.textContent   = song?.titulo || 'Nenhuma música';
   if (playlistEl) playlistEl.textContent = pl?.nome || '—';
   if (!musicPlayer.audio) { const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = '0%'; }
-  const linkEl  = document.getElementById('player-link');
+  const linkEl   = document.getElementById('player-link');
   const iconPlay  = document.getElementById('icon-play');
   const iconPause = document.getElementById('icon-pause');
   if (linkEl) {
@@ -850,10 +1023,18 @@ function updatePlayerUI() {
 }
 
 function togglePlay() {
-  if (musicPlayer.currentSongIdx === -1) { if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) playSong(0, 0); return; }
+  if (musicPlayer.currentSongIdx === -1) {
+    if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) playSong(0, 0);
+    return;
+  }
   musicPlayer.playing = !musicPlayer.playing;
-  if (musicPlayer.audio) { if (musicPlayer.playing) musicPlayer.audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); }); else musicPlayer.audio.pause(); }
-  else { if (musicPlayer.playing) startProgressSimulation(); else clearInterval(musicPlayer.progressTimer); }
+  if (musicPlayer.audio) {
+    if (musicPlayer.playing) musicPlayer.audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); });
+    else musicPlayer.audio.pause();
+  } else {
+    if (musicPlayer.playing) startProgressSimulation();
+    else clearInterval(musicPlayer.progressTimer);
+  }
   updatePlayerUI();
   renderMusicas();
 }
@@ -861,7 +1042,9 @@ function togglePlay() {
 function nextMusica() {
   const pl = musicPlayer.playlists[musicPlayer.currentPlaylistIdx];
   if (!pl) return;
-  let nextIdx = musicPlayer.shuffle ? Math.floor(Math.random() * pl.musicas.length) : (musicPlayer.currentSongIdx + 1) % pl.musicas.length;
+  const nextIdx = musicPlayer.shuffle
+    ? Math.floor(Math.random() * pl.musicas.length)
+    : (musicPlayer.currentSongIdx + 1) % pl.musicas.length;
   playSong(musicPlayer.currentPlaylistIdx, nextIdx);
 }
 
@@ -875,7 +1058,9 @@ function prevMusica() {
     else { const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = '0%'; startProgressSimulation(); }
     return;
   }
-  let prevIdx = musicPlayer.shuffle ? Math.floor(Math.random() * pl.musicas.length) : (musicPlayer.currentSongIdx - 1 + pl.musicas.length) % pl.musicas.length;
+  const prevIdx = musicPlayer.shuffle
+    ? Math.floor(Math.random() * pl.musicas.length)
+    : (musicPlayer.currentSongIdx - 1 + pl.musicas.length) % pl.musicas.length;
   playSong(musicPlayer.currentPlaylistIdx, prevIdx);
 }
 
@@ -915,7 +1100,11 @@ async function loadClima() {
   loading.classList.remove('hidden');
   content.classList.add('hidden');
   errDiv.classList.add('hidden');
-  if (!navigator.geolocation) { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Geolocalização não suportada pelo navegador.'; return; }
+  if (!navigator.geolocation) {
+    loading.classList.add('hidden'); errDiv.classList.remove('hidden');
+    document.getElementById('clima-error-msg').textContent = 'Geolocalização não suportada pelo navegador.';
+    return;
+  }
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude, longitude } = pos.coords;
     try {
@@ -924,24 +1113,27 @@ async function loadClima() {
       const cidade  = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || 'Sua localização';
       const estado  = geoData.address?.state || '';
       document.getElementById('clima-cidade-label').textContent = `📍 ${cidade}${estado ? ', ' + estado : ''}`;
+
       const url   = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
       const wRes  = await fetch(url);
       const wData = await wRes.json();
       const cur   = wData.current;
       const daily = wData.daily;
-      document.getElementById('clima-temp-hoje').textContent  = Math.round(cur.temperature_2m) + '°C';
-      document.getElementById('clima-desc-hoje').textContent  = getWeatherDesc(cur.weather_code);
-      document.getElementById('clima-icon-hoje').textContent  = getWeatherIcon(cur.weather_code);
-      document.getElementById('clima-feels').textContent      = `Sensação: ${Math.round(cur.apparent_temperature)}°C`;
-      document.getElementById('clima-umidade').textContent    = `${cur.relative_humidity_2m}% umidade`;
-      document.getElementById('clima-vento').textContent      = `${Math.round(cur.wind_speed_10m)} km/h vento`;
+
+      document.getElementById('clima-temp-hoje').textContent = Math.round(cur.temperature_2m) + '°C';
+      document.getElementById('clima-desc-hoje').textContent = getWeatherDesc(cur.weather_code);
+      document.getElementById('clima-icon-hoje').textContent = getWeatherIcon(cur.weather_code);
+      document.getElementById('clima-feels').textContent     = `Sensação: ${Math.round(cur.apparent_temperature)}°C`;
+      document.getElementById('clima-umidade').textContent   = `${cur.relative_humidity_2m}% umidade`;
+      document.getElementById('clima-vento').textContent     = `${Math.round(cur.wind_speed_10m)} km/h vento`;
       const vis = cur.visibility >= 1000 ? (cur.visibility/1000).toFixed(0) + ' km' : cur.visibility + ' m';
-      document.getElementById('clima-visib').textContent      = `${vis} visib.`;
-      document.getElementById('dash-clima-icon').textContent  = getWeatherIcon(cur.weather_code);
-      document.getElementById('dash-clima-info').textContent  = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
+      document.getElementById('clima-visib').textContent     = `${vis} visib.`;
+      document.getElementById('dash-clima-icon').textContent = getWeatherIcon(cur.weather_code);
+      document.getElementById('dash-clima-info').textContent = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
+
       const diasNomes = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
       document.getElementById('clima-forecast').innerHTML = daily.time.map((dateStr, i) => {
-        const d = new Date(dateStr + 'T12:00:00');
+        const d      = new Date(dateStr + 'T12:00:00');
         const isHoje = i === 0;
         return `<div class="clima-day-card bento-card ${isHoje ? 'clima-hoje-highlight' : ''}">
           <div class="clima-day-nome">${isHoje ? 'Hoje' : diasNomes[d.getDay()]}</div>
@@ -950,25 +1142,37 @@ async function loadClima() {
           <div class="clima-day-temps"><span class="clima-max">${Math.round(daily.temperature_2m_max[i])}°</span><span class="clima-min">${Math.round(daily.temperature_2m_min[i])}°</span></div>
         </div>`;
       }).join('');
+
       loading.classList.add('hidden');
       content.classList.remove('hidden');
-    } catch (e) { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Erro ao buscar dados do clima. Tente novamente.'; }
-  }, () => { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada.'; });
+    } catch (e) {
+      loading.classList.add('hidden'); errDiv.classList.remove('hidden');
+      document.getElementById('clima-error-msg').textContent = 'Erro ao buscar dados do clima. Tente novamente.';
+    }
+  }, () => {
+    loading.classList.add('hidden'); errDiv.classList.remove('hidden');
+    document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada.';
+  });
 }
 
 // ══════════════════ NOTAS ══════════════════
-let notaAtualId = null;
-let notaAutoSaveTimer = null;
-
-function getNotas() { return appData?.notas || []; }
-
 async function addNota() {
-  const res = await api('POST', '/api/notas');
-  if (res.success) { appData.notas = res.notas; renderNotas(); renderDashboard(); abrirNota(res.notas[0].id); }
+  if (!appData.notas) appData.notas = [];
+  const nova = {
+    id:       Date.now(),
+    titulo:   'Nova Nota',
+    conteudo: '',
+    data:     new Date().toLocaleDateString('pt-BR')
+  };
+  appData.notas.unshift(nova);
+  await save();
+  renderNotas();
+  renderDashboard();
+  abrirNota(nova.id);
 }
 
 function renderNotas() {
-  const notas = getNotas();
+  const notas = appData?.notas || [];
   const lista = document.getElementById('notas-lista');
   if (!notas.length) { lista.innerHTML = '<p class="empty-state">Nenhuma nota ainda</p>'; return; }
   lista.innerHTML = notas.map(n => `
@@ -981,7 +1185,7 @@ function renderNotas() {
 
 function abrirNota(id) {
   notaAtualId = id;
-  const nota = getNotas().find(n => n.id === id);
+  const nota = (appData?.notas || []).find(n => n.id === id);
   if (!nota) return;
   renderNotas();
   document.getElementById('nota-editor').innerHTML = `
@@ -998,32 +1202,42 @@ function autoSaveNota() {
     if (!notaAtualId) return;
     const titulo   = document.getElementById('nota-titulo-edit')?.value || 'Sem título';
     const conteudo = document.getElementById('nota-conteudo-edit')?.value || '';
-    const res = await api('PATCH', `/api/notas/${notaAtualId}`, { titulo, conteudo });
-    if (res.success) { appData.notas = res.notas; renderNotas(); renderDashboard(); }
+    const nota = (appData?.notas || []).find(n => n.id == notaAtualId);
+    if (!nota) return;
+    nota.titulo   = titulo;
+    nota.conteudo = conteudo;
+    await save();
+    renderNotas();
+    renderDashboard();
   }, 800);
 }
 
 async function deletaNota(id) {
-  const res = await api('DELETE', `/api/notas/${id}`);
-  if (res.success) {
-    appData.notas = res.notas;
-    if (notaAtualId === id) { notaAtualId = null; document.getElementById('nota-editor').innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`; }
-    renderNotas();
-    renderDashboard();
+  appData.notas = (appData.notas || []).filter(n => n.id != id);
+  if (notaAtualId === id) {
+    notaAtualId = null;
+    document.getElementById('nota-editor').innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`;
   }
+  await save();
+  renderNotas();
+  renderDashboard();
 }
 
 // ══════════════════ LIVROS ══════════════════
-let livroTabAtual = 'lendo';
-
-function getLivros() { return appData?.livros || []; }
-
-function setLivroTab(status, btn) { livroTabAtual = status; document.querySelectorAll('.livro-tab').forEach(t => t.classList.remove('active')); btn.classList.add('active'); renderLivros(); }
+function setLivroTab(status, btn) {
+  livroTabAtual = status;
+  document.querySelectorAll('.livro-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderLivros();
+}
 
 function renderLivros() {
-  const filtrados = getLivros().filter(l => l.status === livroTabAtual);
+  const filtrados = (appData?.livros || []).filter(l => l.status === livroTabAtual);
   const grid = document.getElementById('livros-grid');
-  if (!filtrados.length) { grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado.'}</p>`; return; }
+  if (!filtrados.length) {
+    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado.'}</p>`;
+    return;
+  }
   grid.innerHTML = filtrados.map(l => `
     <div class="bento-card livro-card">
       <div class="livro-emoji">${l.status === 'lido' ? '✅' : '📖'}</div>
@@ -1041,27 +1255,37 @@ async function addLivro() {
   const autor  = document.getElementById('livro-autor').value.trim();
   const status = document.getElementById('livro-status').value;
   if (!titulo) return alert('Informe o título do livro.');
-  const res = await api('POST', '/api/livros', { titulo, autor, status });
-  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); closeModal('add-livro-modal'); document.getElementById('livro-titulo').value = ''; document.getElementById('livro-autor').value = ''; }
+  if (!appData.livros) appData.livros = [];
+  appData.livros.unshift({
+    id: Date.now(), titulo,
+    autor: autor || '',
+    status: status || 'lendo',
+    data: new Date().toLocaleDateString('pt-BR')
+  });
+  await save();
+  renderLivros();
+  renderDashboard();
+  closeModal('add-livro-modal');
+  document.getElementById('livro-titulo').value = '';
+  document.getElementById('livro-autor').value  = '';
 }
 
 async function marcarLido(id) {
-  const res = await api('PATCH', `/api/livros/${id}`, { status: 'lido' });
-  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); }
+  const livro = (appData.livros || []).find(l => l.id == id);
+  if (livro) livro.status = 'lido';
+  await save();
+  renderLivros();
+  renderDashboard();
 }
 
 async function deletaLivro(id) {
-  const res = await api('DELETE', `/api/livros/${id}`);
-  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); }
+  appData.livros = (appData.livros || []).filter(l => l.id != id);
+  await save();
+  renderLivros();
+  renderDashboard();
 }
 
 // ══════════════════ CALENDÁRIO ══════════════════
-let calAno = new Date().getFullYear();
-let calMes = new Date().getMonth();
-let calDiaSelecionado = null;
-
-function getEventos() { return appData?.eventos || {}; }
-
 function calNavMes(dir) {
   if (dir === 0) { calAno = new Date().getFullYear(); calMes = new Date().getMonth(); }
   else { calMes += dir; if (calMes > 11) { calMes = 0; calAno++; } if (calMes < 0) { calMes = 11; calAno--; } }
@@ -1069,31 +1293,36 @@ function calNavMes(dir) {
 }
 
 function renderCalendario() {
-  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const meses      = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   document.getElementById('cal-mes-label').textContent = `${meses[calMes]} ${calAno}`;
-  const eventos     = getEventos();
-  const hoje        = new Date();
+  const eventos    = appData?.eventos || {};
+  const hoje       = new Date();
   const primeiroDia = new Date(calAno, calMes, 1).getDay();
-  const diasNoMes   = new Date(calAno, calMes + 1, 0).getDate();
+  const diasNoMes  = new Date(calAno, calMes + 1, 0).getDate();
   let html = '';
   for (let i = 0; i < primeiroDia; i++) html += '<div class="cal-day vazio"></div>';
   for (let d = 1; d <= diasNoMes; d++) {
-    const chave    = `${calAno}-${calMes}-${d}`;
+    const chave     = `${calAno}-${calMes}-${d}`;
     const temEvento = (eventos[chave] || []).length > 0;
-    const isHoje   = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
-    const isSel    = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
+    const isHoje    = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
+    const isSel     = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
     html += `<div class="cal-day ${isHoje ? 'cal-hoje' : ''} ${isSel ? 'cal-selecionado' : ''}" onclick="selecionarDia(${d})"><span>${d}</span>${temEvento ? '<div class="cal-dot"></div>' : ''}</div>`;
   }
   document.getElementById('cal-days').innerHTML = html;
   if (calDiaSelecionado) renderEventosDia();
 }
 
-function selecionarDia(d) { calDiaSelecionado = { d, m: calMes, a: calAno }; renderCalendario(); document.getElementById('cal-eventos-hoje').style.display = 'block'; renderEventosDia(); }
+function selecionarDia(d) {
+  calDiaSelecionado = { d, m: calMes, a: calAno };
+  renderCalendario();
+  document.getElementById('cal-eventos-hoje').style.display = 'block';
+  renderEventosDia();
+}
 
 function renderEventosDia() {
   const { d, m, a } = calDiaSelecionado;
   const chave  = `${a}-${m}-${d}`;
-  const eventos = getEventos()[chave] || [];
+  const eventos = (appData?.eventos || {})[chave] || [];
   const meses  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   document.getElementById('cal-eventos-titulo').textContent = `${d} de ${meses[m]}`;
   const lista = document.getElementById('cal-eventos-lista');
@@ -1106,7 +1335,11 @@ function renderEventosDia() {
     </div>`).join('');
 }
 
-function openAddEvento() { document.getElementById('evento-titulo').value = ''; document.getElementById('evento-hora').value = ''; openModal('add-evento-modal'); }
+function openAddEvento() {
+  document.getElementById('evento-titulo').value = '';
+  document.getElementById('evento-hora').value   = '';
+  openModal('add-evento-modal');
+}
 
 async function addEvento() {
   if (!calDiaSelecionado) return;
@@ -1115,11 +1348,22 @@ async function addEvento() {
   const hora = document.getElementById('evento-hora').value;
   const { d, m, a } = calDiaSelecionado;
   const chave = `${a}-${m}-${d}`;
-  const res = await api('POST', `/api/eventos/${chave}`, { titulo, hora });
-  if (res.success) { appData.eventos = res.eventos; renderCalendario(); renderEventosDia(); renderDashboard(); closeModal('add-evento-modal'); }
+  if (!appData.eventos) appData.eventos = {};
+  if (!appData.eventos[chave]) appData.eventos[chave] = [];
+  appData.eventos[chave].push({ id: Date.now(), titulo, hora: hora || '' });
+  await save();
+  renderCalendario();
+  renderEventosDia();
+  renderDashboard();
+  closeModal('add-evento-modal');
 }
 
 async function deletaEvento(chave, id) {
-  const res = await api('DELETE', `/api/eventos/${chave}/${id}`);
-  if (res.success) { appData.eventos = res.eventos; renderCalendario(); renderEventosDia(); renderDashboard(); }
+  if (!appData.eventos?.[chave]) return;
+  appData.eventos[chave] = appData.eventos[chave].filter(e => e.id != id);
+  if (!appData.eventos[chave].length) delete appData.eventos[chave];
+  await save();
+  renderCalendario();
+  renderEventosDia();
+  renderDashboard();
 }
