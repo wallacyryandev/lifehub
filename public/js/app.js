@@ -346,6 +346,7 @@ function addMateria() {
   renderEstudos();
   renderDashboard();
 }
+
 {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('hidden');
