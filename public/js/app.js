@@ -47,6 +47,23 @@ async function api(method, url, body = null) {
 
 // ── Init ─────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  // Register auth tab listeners after DOM is ready
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Register modal overlay listeners after DOM is ready
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.add('hidden');
+    });
+  });
+
   try {
     const me = await api('GET', '/api/me');
     if (me.userId) {
@@ -92,14 +109,7 @@ function updateDashDate() {
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────
-document.querySelectorAll('.auth-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-  });
-});
+
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
@@ -186,11 +196,7 @@ function closeSidebar() {
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.add('hidden');
-  });
-});
+
 
 // ══════════════════ DASHBOARD ══════════════════
 function renderDashboard() {
