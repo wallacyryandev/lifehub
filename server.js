@@ -66,7 +66,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'lifehub_secret_key_2024',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'none', secure: true }
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
