@@ -1,8 +1,19 @@
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
-// Session store usando Supabase REST API
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ── Supabase ────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+// ── Session Store usando Supabase ───────────────────────────────────────────
 class SupabaseSessionStore extends session.Store {
   async get(sid, cb) {
     try {
@@ -33,17 +44,6 @@ class SupabaseSessionStore extends session.Store {
     } catch (e) { cb(e); }
   }
 }
-const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ── Supabase ────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
 
 // ── Template padrão para novos usuários ────────────────────────────────────
 const TEMPLATE = {
