@@ -27,11 +27,113 @@ const TEMPLATE = {
 // ═══════════════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  PWA — Service Worker + Notificações
+// ═══════════════════════════════════════════════════════════════
+let swRegistration = null;
+
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    swRegistration = await navigator.serviceWorker.register('/sw.js');
+    console.log('✓ Service Worker registrado');
+  } catch(e) {
+    console.warn('SW falhou:', e);
+  }
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return 'denied';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  return await Notification.requestPermission();
+}
+
+function sendNotification(title, body, tag = 'lifehub') {
+  if (Notification.permission !== 'granted') return;
+  if (swRegistration) {
+    swRegistration.active?.postMessage({
+      type: 'SHOW_NOTIFICATION',
+      payload: { title, body, tag, icon: '/icons/icon-192x192.png' }
+    });
+  } else {
+    new Notification(title, { body, tag, icon: '/icons/icon-192x192.png', vibrate: [200,100,200] });
+  }
+}
+
+// ── Lembretes de água e creatina ─────────────────────────────────
+let waterIntervalId    = null;
+let creatineTimeoutId  = null;
+
+function startWaterReminder(intervalMinutes = 30) {
+  stopWaterReminder();
+  requestNotificationPermission().then(perm => {
+    if (perm !== 'granted') {
+      showToastNotification('💧 Beba água!', 'Lembrete ativo — mas ative notificações para receber no celular');
+      return;
+    }
+    waterIntervalId = setInterval(() => {
+      sendNotification('💧 Hora de beber água!', 'Hidratação é essencial para um bom treino. Beba pelo menos 200ml agora!', 'water');
+      showToastNotification('💧 Hora de beber água!', 'Hidratação é essencial para um bom treino!');
+    }, intervalMinutes * 60 * 1000);
+    showToastNotification('✅ Lembrete ativado', `Você será lembrado de beber água a cada ${intervalMinutes} minutos`);
+  });
+}
+
+function stopWaterReminder() {
+  if (waterIntervalId) { clearInterval(waterIntervalId); waterIntervalId = null; }
+}
+
+function scheduleCreatineReminder(hour = 8, minute = 0) {
+  if (creatineTimeoutId) { clearTimeout(creatineTimeoutId); creatineTimeoutId = null; }
+  requestNotificationPermission().then(perm => {
+    const now   = new Date();
+    const next  = new Date();
+    next.setHours(hour, minute, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const delay = next - now;
+
+    creatineTimeoutId = setTimeout(function fireCreatine() {
+      sendNotification('💊 Tome sua creatina!', 'Não esqueça da creatina hoje. Consistência é a chave!', 'creatine');
+      showToastNotification('💊 Tome sua creatina!', 'Não esqueça da creatina hoje!');
+      creatineTimeoutId = setTimeout(fireCreatine, 24 * 60 * 60 * 1000);
+    }, delay);
+
+    const fmtHour = String(hour).padStart(2,'0');
+    const fmtMin  = String(minute).padStart(2,'0');
+    showToastNotification('✅ Lembrete de creatina', `Você será lembrado todos os dias às ${fmtHour}:${fmtMin}`);
+  });
+}
+
+// Toast interno bonito (funciona mesmo sem permissão de notificação)
+function showToastNotification(title, body) {
+  const existing = document.getElementById('lh-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'lh-toast';
+  toast.innerHTML = `<div class="lh-toast-title">${title}</div><div class="lh-toast-body">${body}</div>`;
+  toast.style.cssText = `
+    position:fixed;top:1.2rem;right:1.2rem;z-index:99999;
+    background:linear-gradient(135deg,var(--accent,#7c5cbf),var(--accent2,#3ec3c3));
+    color:#fff;padding:1rem 1.2rem;border-radius:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:320px;
+    font-family:var(--font-body,sans-serif);animation:toastIn 0.3s ease;
+    cursor:pointer;
+  `;
+  toast.onclick = () => toast.remove();
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.animation = 'toastOut 0.3s ease forwards'; setTimeout(()=>toast.remove(),300); }, 4000);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Inicializa Supabase (CDN já carregado neste ponto)
   const sbLib = window.supabase || window.supabaseJs;
   if (!sbLib) { console.error('Supabase SDK não carregou!'); return; }
   sb = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  // Registra Service Worker (PWA)
+  registerSW();
 
   setupAuthTabs();
 
@@ -540,6 +642,45 @@ function voltarTreinoSelector() {
   document.getElementById('treino-taf').classList.add('hidden');
 }
 
+let waterActive    = false;
+let creatineActive = false;
+
+function toggleWaterReminder() {
+  waterActive = !waterActive;
+  if (waterActive) {
+    const mins = parseInt(document.getElementById('water-interval')?.value || '30');
+    startWaterReminder(mins);
+  } else {
+    stopWaterReminder();
+    showToastNotification('💧 Lembrete desativado', 'Lembrete de água desativado.');
+  }
+  updateReminderStatus();
+}
+
+function toggleCreatineReminder() {
+  creatineActive = !creatineActive;
+  if (creatineActive) {
+    const timeVal = document.getElementById('creatine-time')?.value || '08:00';
+    const [h, m]  = timeVal.split(':').map(Number);
+    scheduleCreatineReminder(h, m);
+  } else {
+    if (creatineTimeoutId) { clearTimeout(creatineTimeoutId); creatineTimeoutId = null; }
+    showToastNotification('💊 Lembrete desativado', 'Lembrete de creatina desativado.');
+  }
+  updateReminderStatus();
+}
+
+function updateReminderStatus() {
+  const wStatus = document.getElementById('water-status');
+  const wBtn    = document.getElementById('btn-water-toggle');
+  const cStatus = document.getElementById('creatine-status');
+  const cBtn    = document.getElementById('btn-creatine-toggle');
+  if (wStatus) wStatus.textContent = waterActive ? '🟢 Ativo' : 'Desativado';
+  if (wBtn)    { wBtn.textContent = waterActive ? 'Desativar' : 'Ativar'; wBtn.classList.toggle('active', waterActive); }
+  if (cStatus) cStatus.textContent = creatineActive ? '🟢 Ativo' : 'Desativado';
+  if (cBtn)    { cBtn.textContent = creatineActive ? 'Desativar' : 'Ativar'; cBtn.classList.toggle('active', creatineActive); }
+}
+
 function renderAcademia() {
   const selector = document.getElementById('treino-tipo-selector');
   const acadDiv  = document.getElementById('treino-academia');
@@ -547,6 +688,43 @@ function renderAcademia() {
   if (selector) selector.classList.add('hidden');
   if (acadDiv)  acadDiv.classList.remove('hidden');
   if (tafDiv)   tafDiv.classList.add('hidden');
+
+  // Painel de lembretes (cria só uma vez)
+  if (!document.getElementById('treino-reminders-panel') && acadDiv) {
+    const remPanel = document.createElement('div');
+    remPanel.id = 'treino-reminders-panel';
+    remPanel.innerHTML = `
+      <div class="reminders-bar">
+        <div class="reminder-card water-card">
+          <div class="reminder-icon">💧</div>
+          <div class="reminder-info">
+            <div class="reminder-title">Água</div>
+            <div class="reminder-sub" id="water-status">Desativado</div>
+          </div>
+          <div class="reminder-actions">
+            <select id="water-interval" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.3rem 0.5rem;font-size:0.78rem">
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">1 hora</option>
+            </select>
+            <button class="btn-reminder-toggle" id="btn-water-toggle" onclick="toggleWaterReminder()">Ativar</button>
+          </div>
+        </div>
+        <div class="reminder-card creatine-card">
+          <div class="reminder-icon">💊</div>
+          <div class="reminder-info">
+            <div class="reminder-title">Creatina</div>
+            <div class="reminder-sub" id="creatine-status">Desativado</div>
+          </div>
+          <div class="reminder-actions">
+            <input type="time" id="creatine-time" value="08:00" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.3rem 0.5rem;font-size:0.78rem" />
+            <button class="btn-reminder-toggle" id="btn-creatine-toggle" onclick="toggleCreatineReminder()">Ativar</button>
+          </div>
+        </div>
+      </div>`;
+    acadDiv.insertBefore(remPanel, acadDiv.firstChild);
+  }
+  updateReminderStatus();
 
   const grid = document.getElementById('treino-grid-academia');
   if (!grid) return;
@@ -940,20 +1118,91 @@ function renderNotas() {
   const editor = document.getElementById('nota-editor');
   if (!lista) return;
 
-  lista.innerHTML = (appData.notas||[]).map(n => `
-    <div class="nota-item ${notaAtiva===n.id?'active':''}" onclick="selectNota(${n.id})">
-      <div class="nota-item-titulo">${n.titulo||'Sem título'}</div>
-      <div class="nota-item-preview">${(n.conteudo||'').slice(0,50)||'Nota vazia'}</div>
-      <button class="btn-icon-del sm" onclick="event.stopPropagation();delNota(${n.id})">✕</button>
-    </div>`).join('') || '<p class="empty-state">Nenhuma nota ainda</p>';
+  lista.innerHTML = (appData.notas||[]).map(n => {
+    const preview = n.conteudo
+      ? n.conteudo.replace(/<[^>]+>/g, '').slice(0, 50)
+      : 'Nota vazia';
+    return `
+      <div class="nota-item ${notaAtiva===n.id?'active':''}" onclick="selectNota(${n.id})">
+        <div class="nota-item-titulo">${n.titulo||'Sem título'}</div>
+        <div class="nota-item-preview">${preview}</div>
+        <button class="btn-icon-del sm" onclick="event.stopPropagation();delNota(${n.id})">✕</button>
+      </div>`;
+  }).join('') || '<p class="empty-state">Nenhuma nota ainda</p>';
 
   const nota = (appData.notas||[]).find(n => n.id === notaAtiva);
   if (nota && editor) {
     editor.innerHTML = `
-      <input class="nota-titulo-input" value="${nota.titulo||''}" oninput="updateNota(${nota.id},'titulo',this.value)" placeholder="Título da nota" />
-      <textarea class="nota-conteudo-input" oninput="updateNota(${nota.id},'conteudo',this.value)" placeholder="Escreva sua nota...">${nota.conteudo||''}</textarea>`;
+      <input class="nota-titulo-input" value="${(nota.titulo||'').replace(/"/g,'&quot;')}"
+             oninput="updateNota(${nota.id},'titulo',this.value)" placeholder="Título da nota" />
+      <div class="nota-rich-toolbar">
+        <button class="rich-btn" onclick="execCmd('bold')" title="Negrito"><b>B</b></button>
+        <button class="rich-btn" onclick="execCmd('italic')" title="Itálico"><i>I</i></button>
+        <button class="rich-btn" onclick="execCmd('underline')" title="Sublinhado"><u>U</u></button>
+        <button class="rich-btn" onclick="execCmd('strikeThrough')" title="Tachado"><s>S</s></button>
+        <span class="rich-sep"></span>
+        <button class="rich-btn" onclick="execCmd('insertUnorderedList')" title="Lista">≡</button>
+        <button class="rich-btn" onclick="execCmd('insertOrderedList')" title="Lista numerada">1.</button>
+        <span class="rich-sep"></span>
+        <button class="rich-btn" onclick="execCmd('justifyLeft')" title="Esquerda">⬛L</button>
+        <button class="rich-btn" onclick="execCmd('justifyCenter')" title="Centro">⬛C</button>
+        <button class="rich-btn" onclick="execCmd('removeFormat')" title="Limpar formatação">✕F</button>
+      </div>
+      <div class="nota-rich-editor" id="nota-rich-content-${nota.id}"
+           contenteditable="true"
+           oninput="updateNotaRich(${nota.id})"
+           placeholder="Escreva sua nota...
+Use *texto* para negrito, _texto_ para itálico">${nota.conteudo||''}</div>`;
+    // Foca no editor e posiciona cursor no fim
+    setTimeout(() => {
+      const ed = document.getElementById(`nota-rich-content-${nota.id}`);
+      if (ed) { ed.focus(); placeCaretAtEnd(ed); }
+    }, 50);
   } else if (editor) {
     editor.innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`;
+  }
+}
+
+function execCmd(cmd, value = null) {
+  document.execCommand(cmd, false, value);
+  const nota = (appData.notas||[]).find(n => n.id === notaAtiva);
+  if (nota) {
+    const ed = document.getElementById(`nota-rich-content-${nota.id}`);
+    if (ed) { nota.conteudo = ed.innerHTML; scheduleSave(); }
+  }
+}
+
+function updateNotaRich(id) {
+  const ed   = document.getElementById(`nota-rich-content-${id}`);
+  const nota = (appData.notas||[]).find(n => n.id == id);
+  if (nota && ed) {
+    nota.conteudo = ed.innerHTML;
+    scheduleSave();
+    // Atualiza só a lista
+    const lista = document.getElementById('notas-lista');
+    if (lista) {
+      lista.innerHTML = (appData.notas||[]).map(n => {
+        const preview = n.conteudo ? n.conteudo.replace(/<[^>]+>/g,'').slice(0,50) : 'Nota vazia';
+        return `
+          <div class="nota-item ${notaAtiva===n.id?'active':''}" onclick="selectNota(${n.id})">
+            <div class="nota-item-titulo">${n.titulo||'Sem título'}</div>
+            <div class="nota-item-preview">${preview}</div>
+            <button class="btn-icon-del sm" onclick="event.stopPropagation();delNota(${n.id})">✕</button>
+          </div>`;
+      }).join('') || '<p class="empty-state">Nenhuma nota ainda</p>';
+    }
+  }
+}
+
+function placeCaretAtEnd(el) {
+  el.focus();
+  if (typeof window.getSelection !== 'undefined' && typeof document.createRange !== 'undefined') {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
   }
 }
 
@@ -983,12 +1232,15 @@ function updateNota(id, campo, valor) {
   // Atualiza só a lista (leve) sem recriar o editor
   const lista = document.getElementById('notas-lista');
   if (lista) {
-    lista.innerHTML = (appData.notas||[]).map(n => `
-      <div class="nota-item ${notaAtiva===n.id?'active':''}" onclick="selectNota(${n.id})">
-        <div class="nota-item-titulo">${n.titulo||'Sem título'}</div>
-        <div class="nota-item-preview">${(n.conteudo||'').slice(0,50)||'Nota vazia'}</div>
-        <button class="btn-icon-del sm" onclick="event.stopPropagation();delNota(${n.id})">✕</button>
-      </div>`).join('') || '<p class="empty-state">Nenhuma nota ainda</p>';
+    lista.innerHTML = (appData.notas||[]).map(n => {
+      const preview = n.conteudo ? n.conteudo.replace(/<[^>]+>/g,'').slice(0,50) : 'Nota vazia';
+      return `
+        <div class="nota-item ${notaAtiva===n.id?'active':''}" onclick="selectNota(${n.id})">
+          <div class="nota-item-titulo">${n.titulo||'Sem título'}</div>
+          <div class="nota-item-preview">${preview}</div>
+          <button class="btn-icon-del sm" onclick="event.stopPropagation();delNota(${n.id})">✕</button>
+        </div>`;
+    }).join('') || '<p class="empty-state">Nenhuma nota ainda</p>';
   }
 }
 
@@ -1087,22 +1339,49 @@ function renderCalendario() {
   const first   = new Date(year, month, 1).getDay();
   const daysInM = new Date(year, month+1, 0).getDate();
   const hoje    = new Date();
+  const isCurrentMonth = hoje.getFullYear() === year && hoje.getMonth() === month;
 
   let html = '';
   for (let i = 0; i < first; i++) html += '<div class="cal-day empty"></div>';
   for (let d = 1; d <= daysInM; d++) {
     const key    = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const evts   = (appData.eventos[key]||[]).length;
-    const isHoje = d===hoje.getDate() && month===hoje.getMonth() && year===hoje.getFullYear();
+    const isHoje = d===hoje.getDate() && isCurrentMonth;
     const isSel  = calDiaSel === key;
     html += `<div class="cal-day ${isHoje?'hoje':''} ${isSel?'selected':''}" onclick="selectCalDia('${key}',${d})">
-               <span>${d}</span>
+               <span class="cal-day-num">${d}</span>
+               ${isHoje ? '<span class="cal-today-dot"></span>' : ''}
                ${evts ? `<span class="cal-dot">${evts}</span>` : ''}
              </div>`;
   }
   grid.innerHTML = html;
 
   if (calDiaSel) renderEventosDia();
+
+  // Agendamento de notificações de eventos próximos (verifica 1x por minuto)
+  scheduleEventNotifications();
+}
+
+let eventNotifInterval = null;
+function scheduleEventNotifications() {
+  if (eventNotifInterval) return; // já rodando
+  eventNotifInterval = setInterval(() => {
+    const now   = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const evts  = appData?.eventos?.[today] || [];
+    evts.forEach(ev => {
+      if (!ev.hora) return;
+      const [h, m] = ev.hora.split(':').map(Number);
+      const evTime = new Date();
+      evTime.setHours(h, m, 0, 0);
+      const diffMin = (evTime - now) / 60000;
+      // Notifica se falta entre 14 e 16 minutos (janela de 2 min para não spam)
+      if (diffMin > 14 && diffMin <= 16) {
+        sendNotification(`📅 Evento em 15 min: ${ev.titulo}`, `Hoje às ${ev.hora}`, 'evento-' + ev.id);
+        showToastNotification(`📅 ${ev.titulo} em 15 minutos`, `Hoje às ${ev.hora}`);
+      }
+    });
+  }, 60 * 1000);
 }
 
 function calNavMes(dir) {
