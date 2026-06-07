@@ -126,31 +126,124 @@ function showAuthScreen() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  DADOS DO USUÁRIO
+//  OFFLINE-FIRST — localStorage + sync automático
 // ═══════════════════════════════════════════════════════════════
-async function loadUserData() {
-  const { data, error } = await sb
+const LOCAL_KEY = () => `lifehub_data_${currentUser?.id}`;
+let pendingSync  = false;
+let isOnline     = navigator.onLine;
+
+// Indicador visual de status de conexão
+function updateOnlineStatus(online) {
+  isOnline = online;
+  let badge = document.getElementById('sync-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'sync-badge';
+    badge.style.cssText = `
+      position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);
+      padding:0.4rem 1rem;border-radius:20px;font-size:0.8rem;font-weight:600;
+      z-index:9999;transition:all 0.4s;pointer-events:none;
+      font-family:var(--font-body, sans-serif);
+    `;
+    document.body.appendChild(badge);
+  }
+  if (online) {
+    badge.textContent = '✓ Online';
+    badge.style.background = 'rgba(62,207,142,0.9)';
+    badge.style.color = '#000';
+    badge.style.opacity = '1';
+    setTimeout(() => { badge.style.opacity = '0'; }, 2500);
+    // Tenta sincronizar dados pendentes
+    if (pendingSync) syncToSupabase();
+  } else {
+    badge.textContent = '📶 Offline — salvando localmente';
+    badge.style.background = 'rgba(245,163,90,0.95)';
+    badge.style.color = '#000';
+    badge.style.opacity = '1';
+  }
+}
+
+window.addEventListener('online',  () => updateOnlineStatus(true));
+window.addEventListener('offline', () => updateOnlineStatus(false));
+
+// Salva no localStorage imediatamente
+function saveLocal() {
+  if (!currentUser || !appData) return;
+  try {
+    localStorage.setItem(LOCAL_KEY(), JSON.stringify({
+      dados: appData,
+      updatedAt: Date.now()
+    }));
+  } catch(e) {
+    console.warn('localStorage cheio:', e);
+  }
+}
+
+// Carrega do localStorage
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY());
+    if (!raw) return null;
+    return JSON.parse(raw).dados;
+  } catch { return null; }
+}
+
+// Sincroniza com o Supabase quando online
+async function syncToSupabase() {
+  if (!currentUser || !appData || !isOnline) return;
+  const { error } = await sb
     .from('dados_usuario')
-    .select('dados')
-    .eq('user_id', currentUser.id)
-    .maybeSingle();
+    .upsert({ user_id: currentUser.id, dados: appData });
+  if (error) {
+    console.error('Erro ao sincronizar:', error);
+  } else {
+    pendingSync = false;
+    console.log('✓ Sincronizado com Supabase');
+  }
+}
 
-  if (error) console.error('Erro ao buscar dados:', error);
+async function loadUserData() {
+  // 1. Tenta carregar do Supabase (se online)
+  if (isOnline) {
+    try {
+      const { data, error } = await sb
+        .from('dados_usuario')
+        .select('dados')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
 
-  if (!data) {
-    // Primeiro acesso — cria registro com template
-    const template = JSON.parse(JSON.stringify(TEMPLATE));
-    const { error: insertErr } = await sb
-      .from('dados_usuario')
-      .insert({ user_id: currentUser.id, dados: template });
-    if (insertErr) console.error('Erro ao criar dados:', insertErr);
-    return template;
+      if (!error && data) {
+        const d = migrarDados(data.dados);
+        saveLocal(); // espelha localmente
+        return d;
+      }
+
+      if (!error && !data) {
+        // Primeiro acesso
+        const template = JSON.parse(JSON.stringify(TEMPLATE));
+        await sb.from('dados_usuario').insert({ user_id: currentUser.id, dados: template });
+        localStorage.setItem(LOCAL_KEY(), JSON.stringify({ dados: template, updatedAt: Date.now() }));
+        return template;
+      }
+    } catch(e) {
+      console.warn('Supabase indisponível, usando cache local:', e);
+    }
   }
 
-  // Garante campos novos (migração suave)
-  const d = data.dados;
+  // 2. Offline ou erro — usa localStorage
+  const local = loadLocal();
+  if (local) {
+    console.log('📦 Carregando dados offline do localStorage');
+    pendingSync = true;
+    return migrarDados(local);
+  }
+
+  // 3. Sem nada — retorna template vazio
+  return JSON.parse(JSON.stringify(TEMPLATE));
+}
+
+function migrarDados(d) {
   if (!d.treino?.academia) {
-    // Migra estrutura antiga { segunda:[], ... } para { academia:{...}, taf:{...} }
     const legacyTreino = (typeof d.treino === 'object' && !d.treino.academia) ? d.treino : {};
     d.treino = {
       academia: { ...TEMPLATE.treino.academia, ...legacyTreino },
@@ -164,16 +257,19 @@ async function loadUserData() {
   if (!d.notas)    d.notas   = [];
   if (!d.livros)   d.livros  = [];
   if (!d.eventos)  d.eventos = {};
-
   return d;
 }
 
 async function saveData() {
   if (!currentUser || !appData) return;
-  const { error } = await sb
-    .from('dados_usuario')
-    .upsert({ user_id: currentUser.id, dados: appData });
-  if (error) console.error('Erro ao salvar:', error);
+  // Sempre salva local primeiro (instantâneo)
+  saveLocal();
+  // Se online, sincroniza com Supabase
+  if (isOnline) {
+    await syncToSupabase();
+  } else {
+    pendingSync = true;
+  }
 }
 
 // Debounce automático — salva 1,5 s após última alteração
