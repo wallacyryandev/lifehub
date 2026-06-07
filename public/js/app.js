@@ -6,7 +6,7 @@
 // ── Supabase init ────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://vihscazkhychhlnqtwof.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
-const { createClient } = supabase;
+const { createClient } = window.supabase || window.supabaseJs || supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── Estado global ────────────────────────────────────────────────
@@ -346,6 +346,7 @@ function addMateria() {
   renderEstudos();
   renderDashboard();
 }
+{
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('hidden');
 }
