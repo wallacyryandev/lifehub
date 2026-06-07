@@ -6,8 +6,7 @@
 // ── Supabase init ────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://vihscazkhychhlnqtwof.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
-const { createClient } = window.supabase || window.supabaseJs || supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+let sb = null;
 
 // ── Estado global ────────────────────────────────────────────────
 let currentUser = null;
@@ -29,6 +28,11 @@ const TEMPLATE = {
 //  BOOT
 // ═══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
+  // Inicializa Supabase (CDN já carregado neste ponto)
+  const sbLib = window.supabase || window.supabaseJs;
+  if (!sbLib) { console.error('Supabase SDK não carregou!'); return; }
+  sb = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON);
+
   setupAuthTabs();
 
   // Botão voltar do Android fecha sidebar/modal aberto
