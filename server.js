@@ -1,7 +1,38 @@
 const express = require('express');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
+
+// Session store usando Supabase REST API
+class SupabaseSessionStore extends session.Store {
+  async get(sid, cb) {
+    try {
+      const { data } = await supabase
+        .from('sessions')
+        .select('data, expires')
+        .eq('sid', sid)
+        .maybeSingle();
+      if (!data) return cb(null, null);
+      if (new Date(data.expires) < new Date()) {
+        await supabase.from('sessions').delete().eq('sid', sid);
+        return cb(null, null);
+      }
+      cb(null, JSON.parse(data.data));
+    } catch (e) { cb(e); }
+  }
+  async set(sid, sessionData, cb) {
+    try {
+      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase.from('sessions').upsert({ sid, data: JSON.stringify(sessionData), expires });
+      cb(null);
+    } catch (e) { cb(e); }
+  }
+  async destroy(sid, cb) {
+    try {
+      await supabase.from('sessions').delete().eq('sid', sid);
+      cb(null);
+    } catch (e) { cb(e); }
+  }
+}
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -30,10 +61,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-  store: new pgSession({
-    conString: process.env.DATABASE_URL,
-    tableName: 'session'
-  }),
+  store: new SupabaseSessionStore(),
   secret: process.env.SESSION_SECRET || 'lifehub_secret_key_2024',
   resave: false,
   saveUninitialized: false,
