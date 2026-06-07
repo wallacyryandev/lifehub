@@ -60,12 +60,13 @@ const TEMPLATE = {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.set('trust proxy', 1);
 app.use(session({
   store: new SupabaseSessionStore(),
   secret: process.env.SESSION_SECRET || 'lifehub_secret_key_2024',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: true }
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
