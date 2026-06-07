@@ -1,11 +1,26 @@
 /* ═══════════════════════════════════════════
    LIFEHUB — Frontend Application Logic
+   Versão com Supabase Storage + Database
 ═══════════════════════════════════════════ */
+
+// ══════════════════ SUPABASE CONFIG ══════════════════
+// ⚠️  Substitua apenas se mudar de projeto
+const SUPABASE_URL    = 'https://vihscazkhychhlnqtwof.supabase.co';
+const SUPABASE_ANON   = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
+const STORAGE_BUCKET  = 'arquivos-estudos'; // Nome do bucket que você criar no Storage
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── State ────────────────────────────────────────────────────────────
 let appData = null;
 let currentModule = 'dashboard';
 let treinoCurrentDia = null;
+
+// Estado de treino/estudos
+let treinoTipoAtual      = null; // 'academia' | 'taf'
+let estudosCategoriaAtual = null; // 'escola'  | 'concurso'
+let estudosTabAtual       = 'topicos'; // 'topicos' | 'pdfs'
 
 // Music state
 let musicPlayer = {
@@ -15,8 +30,8 @@ let musicPlayer = {
   playing: false,
   shuffle: false,
   order: false,
-  audio: null,          // HTMLAudioElement real
-  progressTimer: null   // fallback timer p/ links não-áudio
+  audio: null,
+  progressTimer: null
 };
 
 // ── API Helpers ──────────────────────────────────────────────────────
@@ -32,7 +47,6 @@ async function api(method, url, body = null) {
 
 // ── Init ─────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
-  // Check session
   try {
     const me = await api('GET', '/api/me');
     if (me.userId) {
@@ -44,8 +58,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch {
     showAuth();
   }
-
-  // Dashboard date
   updateDashDate();
 });
 
@@ -89,7 +101,6 @@ document.querySelectorAll('.auth-tab').forEach(tab => {
   });
 });
 
-// Enter key on login
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const activeForm = document.querySelector('.auth-form.active');
@@ -103,19 +114,10 @@ async function doLogin() {
   const senha = document.getElementById('login-senha').value;
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
-
-  if (!email || !senha) {
-    errEl.textContent = 'Preencha e-mail e senha.';
-    return errEl.classList.remove('hidden');
-  }
+  if (!email || !senha) { errEl.textContent = 'Preencha e-mail e senha.'; return errEl.classList.remove('hidden'); }
   const res = await api('POST', '/api/login', { email, senha });
-  if (res.error) {
-    errEl.textContent = res.error;
-    errEl.classList.remove('hidden');
-  } else {
-    showApp(res.nome);
-    await loadAllData();
-  }
+  if (res.error) { errEl.textContent = res.error; errEl.classList.remove('hidden'); }
+  else { showApp(res.nome); await loadAllData(); }
 }
 
 async function doRegister() {
@@ -124,19 +126,10 @@ async function doRegister() {
   const senha = document.getElementById('reg-senha').value;
   const errEl = document.getElementById('reg-error');
   errEl.classList.add('hidden');
-
-  if (!nome || !email || !senha) {
-    errEl.textContent = 'Preencha todos os campos.';
-    return errEl.classList.remove('hidden');
-  }
+  if (!nome || !email || !senha) { errEl.textContent = 'Preencha todos os campos.'; return errEl.classList.remove('hidden'); }
   const res = await api('POST', '/api/register', { nome, email, senha });
-  if (res.error) {
-    errEl.textContent = res.error;
-    errEl.classList.remove('hidden');
-  } else {
-    showApp(res.nome);
-    await loadAllData();
-  }
+  if (res.error) { errEl.textContent = res.error; errEl.classList.remove('hidden'); }
+  else { showApp(res.nome); await loadAllData(); }
 }
 
 async function doLogout() {
@@ -148,10 +141,10 @@ async function doLogout() {
 // ── Load All Data ─────────────────────────────────────────────────────
 async function loadAllData() {
   appData = await api('GET', '/api/data');
-  // garante campos novos mesmo em contas antigas
   if (!appData.notas)   appData.notas   = [];
   if (!appData.livros)  appData.livros  = [];
   if (!appData.eventos) appData.eventos = {};
+  if (!appData.taf)     appData.taf     = [];
   renderDashboard();
   renderTreino();
   renderEstudos();
@@ -161,20 +154,17 @@ async function loadAllData() {
 
 // ── Module Navigation ─────────────────────────────────────────────────
 function switchModule(name, btn) {
-  document.querySelectorAll('.module').forEach(m => m.classList.add('hidden'));
+  document.querySelectorAll('.module').forEach(m => { m.classList.add('hidden'); m.classList.remove('active'); });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
   const section = document.getElementById('module-' + name);
-  if (section) {
-    section.classList.remove('hidden');
-    section.classList.add('active');
-  }
+  if (section) { section.classList.remove('hidden'); section.classList.add('active'); }
   if (btn) btn.classList.add('active');
 
   const titles = { dashboard:'Dashboard', treino:'Treino', estudos:'Estudos', financas:'Finanças', musicas:'Música', clima:'Clima', notas:'Notas', livros:'Livros', calendario:'Calendário' };
-  if (name === 'clima') loadClima();
-  if (name === 'notas') renderNotas();
-  if (name === 'livros') renderLivros();
+  if (name === 'clima')     loadClima();
+  if (name === 'notas')     renderNotas();
+  if (name === 'livros')    renderLivros();
   if (name === 'calendario') renderCalendario();
   document.getElementById('topbar-title').textContent = titles[name] || name;
 
@@ -208,7 +198,7 @@ function renderDashboard() {
 
   // Treino
   const hoje = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date().getDay()];
-  const treinoHoje = appData.treino[hoje] || [];
+  const treinoHoje = appData.treino?.[hoje] || [];
   document.getElementById('dash-treino-info').textContent =
     treinoHoje.length ? `${treinoHoje.length} exercício(s) hoje` : 'Nenhum treino hoje';
 
@@ -226,38 +216,94 @@ function renderDashboard() {
   // Músicas
   const pls = appData.musicas?.playlists || [];
   const totalSongs = pls.reduce((a, p) => a + p.musicas.length, 0);
-  document.getElementById('dash-musicas-info').textContent =
-    pls.length ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
+  const dashMusEl = document.getElementById('dash-musicas-info');
+  if (dashMusEl) dashMusEl.textContent = pls.length ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
 
   // Notas
   const notas = getNotas();
-  document.getElementById('dash-notas-info').textContent =
-    notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
+  document.getElementById('dash-notas-info').textContent = notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
 
   // Livros
   const livros = getLivros();
   const lendo = livros.filter(l => l.status === 'lendo').length;
   const lidos = livros.filter(l => l.status === 'lido').length;
-  document.getElementById('dash-livros-info').textContent =
-    livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
+  document.getElementById('dash-livros-info').textContent = livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
 
   // Eventos hoje
   const hoje2 = new Date();
   const chaveHoje = `${hoje2.getFullYear()}-${hoje2.getMonth()}-${hoje2.getDate()}`;
   const eventos = getEventos()[chaveHoje] || [];
-  document.getElementById('dash-hoje-eventos').textContent =
-    eventos.length ? `📅 ${eventos.length} evento(s) hoje` : '';
+  document.getElementById('dash-hoje-eventos').textContent = eventos.length ? `📅 ${eventos.length} evento(s) hoje` : '';
 }
 
 // ══════════════════ TREINO ══════════════════
 const diasSemana = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 
+// ── Submenu Treino ────────────────────────────────────────────────────
+function toggleTreinoSubmenu(btn) {
+  const submenu = document.getElementById('treino-submenu');
+  const isOpen  = submenu.classList.contains('open');
+
+  // Fecha outros submenus
+  document.querySelectorAll('.submenu').forEach(s => s.classList.remove('open'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  if (!isOpen) {
+    submenu.classList.add('open');
+    if (btn) btn.classList.add('active');
+    // Vai para o módulo treino e mostra seletor
+    switchModule('treino', btn);
+    mostrarTreinoSelector();
+  }
+}
+
+function mostrarTreinoSelector() {
+  document.getElementById('treino-tipo-selector').classList.remove('hidden');
+  document.getElementById('treino-academia').classList.add('hidden');
+  document.getElementById('treino-taf').classList.add('hidden');
+  treinoTipoAtual = null;
+}
+
+function voltarTreinoSelector() {
+  mostrarTreinoSelector();
+}
+
+function switchTreinoTipo(tipo, btn) {
+  treinoTipoAtual = tipo;
+
+  // Abre o módulo treino se ainda não estiver aberto
+  if (currentModule !== 'treino') switchModule('treino', document.querySelector('[data-module=treino]'));
+
+  // Ativa o subitem correto
+  document.querySelectorAll('.nav-subitem').forEach(s => s.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  document.getElementById('treino-tipo-selector').classList.add('hidden');
+  document.getElementById('treino-academia').classList.add('hidden');
+  document.getElementById('treino-taf').classList.add('hidden');
+
+  if (tipo === 'academia') {
+    document.getElementById('treino-academia').classList.remove('hidden');
+    renderTreinoAcademia();
+  } else if (tipo === 'taf') {
+    document.getElementById('treino-taf').classList.remove('hidden');
+    renderTaf();
+  }
+  closeSidebar();
+}
+
+// ── Academia ──────────────────────────────────────────────────────────
 function renderTreino() {
-  const grid = document.getElementById('treino-grid');
+  renderTreinoAcademia();
+}
+
+function renderTreinoAcademia() {
+  const grid = document.getElementById('treino-grid-academia');
+  if (!grid) return;
   const hoje = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date().getDay()];
 
   grid.innerHTML = diasSemana.map(dia => {
-    const exercicios = appData?.treino[dia] || [];
+    const exercicios = appData?.treino?.[dia] || [];
     const isHoje = dia === hoje;
     const preview = exercicios[0]?.nome || 'Clique para adicionar';
     return `
@@ -278,13 +324,11 @@ function openTreinoModal(dia) {
 
 function renderExerciseList(dia) {
   const list = document.getElementById('exercise-list');
-  const exercicios = appData?.treino[dia] || [];
-
+  const exercicios = appData?.treino?.[dia] || [];
   if (!exercicios.length) {
     list.innerHTML = '<p class="empty-state">Nenhum exercício registrado</p>';
     return;
   }
-
   list.innerHTML = exercicios.map(ex => `
     <div class="exercise-item">
       <div class="exercise-info">
@@ -300,14 +344,12 @@ async function addExercicio() {
   const carga  = document.getElementById('ex-carga').value;
   const series = document.getElementById('ex-series').value;
   const reps   = document.getElementById('ex-reps').value;
-
   if (!nome || !series || !reps) return alert('Preencha exercício, séries e repetições.');
-
   const res = await api('POST', `/api/treino/${treinoCurrentDia}`, { nome, carga: carga || 0, series, reps });
   if (res.success) {
     appData.treino = res.treino;
     renderExerciseList(treinoCurrentDia);
-    renderTreino();
+    renderTreinoAcademia();
     renderDashboard();
     document.getElementById('ex-nome').value = '';
     document.getElementById('ex-carga').value = '';
@@ -321,16 +363,149 @@ async function deleteExercicio(dia, id) {
   if (res.success) {
     appData.treino[dia] = appData.treino[dia].filter(e => e.id != id);
     renderExerciseList(dia);
-    renderTreino();
+    renderTreinoAcademia();
     renderDashboard();
+  }
+}
+
+// ── TAF ────────────────────────────────────────────────────────────────
+function renderTaf() {
+  const grid = document.getElementById('taf-grid');
+  const registros = appData?.taf || [];
+  if (!registros.length) {
+    grid.innerHTML = '<p class="empty-state" style="grid-column:1/-1">Nenhum registro de TAF ainda. Clique em "+ Novo Registro".</p>';
+    return;
+  }
+  // Ordena por data decrescente
+  const sorted = [...registros].sort((a, b) => new Date(b.data) - new Date(a.data));
+  grid.innerHTML = sorted.map(r => `
+    <div class="bento-card taf-card">
+      <div class="taf-card-header">
+        <span class="taf-card-data">📅 ${formatarData(r.data)}</span>
+        <button class="btn-icon" onclick="deleteTaf(${r.id})">✕</button>
+      </div>
+      <div class="taf-stat">
+        <span>🏃</span>
+        <span class="taf-stat-label">Corrida 12 min</span>
+        <span class="taf-stat-val">${r.corrida ? r.corrida + ' m' : '—'}</span>
+      </div>
+      <div class="taf-stat">
+        <span>💪</span>
+        <span class="taf-stat-label">Flexão de braço</span>
+        <span class="taf-stat-val">${r.flexao ?? '—'} rep</span>
+      </div>
+      <div class="taf-stat">
+        <span>🤸</span>
+        <span class="taf-stat-label">Abdominal</span>
+        <span class="taf-stat-val">${r.abdominal ?? '—'} rep</span>
+      </div>
+      ${r.obs ? `<p class="taf-obs">"${r.obs}"</p>` : ''}
+    </div>`).join('');
+}
+
+function formatarData(dateStr) {
+  if (!dateStr) return '—';
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+async function addTaf() {
+  const data      = document.getElementById('taf-data').value;
+  const corrida   = document.getElementById('taf-corrida').value;
+  const flexao    = document.getElementById('taf-flexao').value;
+  const abdominal = document.getElementById('taf-abdominal').value;
+  const obs       = document.getElementById('taf-obs').value.trim();
+
+  if (!data) return alert('Informe a data do TAF.');
+
+  const res = await api('POST', '/api/taf', { data, corrida: corrida || null, flexao: flexao || null, abdominal: abdominal || null, obs });
+  if (res.success) {
+    appData.taf = res.taf;
+    renderTaf();
+    closeModal('add-taf-modal');
+    document.getElementById('taf-data').value = '';
+    document.getElementById('taf-corrida').value = '';
+    document.getElementById('taf-flexao').value = '';
+    document.getElementById('taf-abdominal').value = '';
+    document.getElementById('taf-obs').value = '';
+  }
+}
+
+async function deleteTaf(id) {
+  if (!confirm('Remover este registro TAF?')) return;
+  const res = await api('DELETE', `/api/taf/${id}`);
+  if (res.success) {
+    appData.taf = appData.taf.filter(r => r.id != id);
+    renderTaf();
   }
 }
 
 // ══════════════════ ESTUDOS ══════════════════
 let estudosCurrentMateria = null;
 
+// ── Submenu Estudos ───────────────────────────────────────────────────
+function toggleEstudosSubmenu(btn) {
+  const submenu = document.getElementById('estudos-submenu');
+  const isOpen  = submenu.classList.contains('open');
+
+  document.querySelectorAll('.submenu').forEach(s => s.classList.remove('open'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  if (!isOpen) {
+    submenu.classList.add('open');
+    if (btn) btn.classList.add('active');
+    switchModule('estudos', btn);
+    mostrarEstudosSelector();
+  }
+}
+
+function mostrarEstudosSelector() {
+  document.getElementById('estudos-categoria-selector').classList.remove('hidden');
+  document.getElementById('estudos-categoria-content').classList.add('hidden');
+  estudosCategoriaAtual = null;
+}
+
+function voltarEstudosSelector() {
+  mostrarEstudosSelector();
+}
+
+function switchEstudosCategoria(categoria, btn) {
+  estudosCategoriaAtual = categoria;
+
+  if (currentModule !== 'estudos') switchModule('estudos', document.querySelector('[data-module=estudos]'));
+
+  document.querySelectorAll('.nav-subitem').forEach(s => s.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  document.getElementById('estudos-categoria-selector').classList.add('hidden');
+  document.getElementById('estudos-categoria-content').classList.remove('hidden');
+
+  const label = categoria === 'escola' ? '🏫 Escola' : '📋 Concurso';
+  document.getElementById('estudos-categoria-titulo').textContent = label;
+  document.getElementById('estudos-categoria-sub').textContent =
+    categoria === 'escola' ? 'Matérias escolares e tópicos de estudo' : 'Matérias e PDFs para concursos';
+
+  // Volta para aba tópicos por padrão
+  switchEstudosTab('topicos', document.querySelector('.estudos-tab'));
+  renderEstudos();
+  closeSidebar();
+}
+
+function switchEstudosTab(tab, btn) {
+  estudosTabAtual = tab;
+  document.querySelectorAll('.estudos-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  document.getElementById('estudos-tab-topicos').classList.toggle('hidden', tab !== 'topicos');
+  document.getElementById('estudos-tab-pdfs').classList.toggle('hidden', tab !== 'pdfs');
+
+  if (tab === 'pdfs') carregarPdfs();
+}
+
+// ── Tópicos ───────────────────────────────────────────────────────────
 function renderEstudos() {
   const grid = document.getElementById('estudos-grid');
+  if (!grid) return;
   const materias = appData?.estudos || [];
 
   if (!materias.length) {
@@ -395,10 +570,7 @@ function openMateriaModal(materiaId) {
 
 function renderTopicoList(mat) {
   const list = document.getElementById('topico-list');
-  if (!mat.topicos.length) {
-    list.innerHTML = '<p class="empty-state">Nenhum tópico ainda</p>';
-    return;
-  }
+  if (!mat.topicos.length) { list.innerHTML = '<p class="empty-state">Nenhum tópico ainda</p>'; return; }
   list.innerHTML = mat.topicos.map(t => `
     <div class="topico-item ${t.concluido ? 'done' : ''}" onclick="toggleTopico(${mat.id}, ${t.id})">
       <div class="topico-check"></div>
@@ -426,12 +598,7 @@ async function toggleTopico(materiaId, topicoId) {
   const top = mat?.topicos.find(t => t.id == topicoId);
   if (!top) return;
   const res = await api('PATCH', `/api/estudos/${materiaId}/topico/${topicoId}`, { concluido: !top.concluido });
-  if (res.success) {
-    top.concluido = !top.concluido;
-    renderTopicoList(mat);
-    renderEstudos();
-    renderDashboard();
-  }
+  if (res.success) { top.concluido = !top.concluido; renderTopicoList(mat); renderEstudos(); renderDashboard(); }
 }
 
 async function deleteTopico(materiaId, topicoId) {
@@ -443,6 +610,222 @@ async function deleteTopico(materiaId, topicoId) {
     renderEstudos();
     renderDashboard();
   }
+}
+
+// ══════════════════ ESTUDOS — SISTEMA DE PDFs (SUPABASE) ══════════════════
+
+// ── Upload ────────────────────────────────────────────────────────────
+let pdfFileAtual = null;
+
+function onPdfFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pdfFileAtual = file;
+
+  const nameEl = document.getElementById('pdf-file-name');
+  nameEl.classList.remove('hidden');
+  nameEl.innerHTML = `📄 ${file.name} <span style="color:var(--text-dim);font-size:0.75rem">(${(file.size / 1024).toFixed(0)} KB)</span>`;
+
+  document.getElementById('upload-area').style.borderColor = 'var(--accent2)';
+}
+
+async function uploadPdf() {
+  const materia = document.getElementById('pdf-materia').value.trim();
+  const titulo  = document.getElementById('pdf-titulo').value.trim();
+  const errEl   = document.getElementById('upload-error');
+  errEl.classList.add('hidden');
+
+  if (!materia) { errEl.textContent = 'Informe o nome da matéria.'; return errEl.classList.remove('hidden'); }
+  if (!titulo)  { errEl.textContent = 'Informe o título da aula.';  return errEl.classList.remove('hidden'); }
+  if (!pdfFileAtual) { errEl.textContent = 'Selecione um arquivo PDF.'; return errEl.classList.remove('hidden'); }
+
+  const categoria = estudosCategoriaAtual || 'escola';
+
+  // Cria um nome de arquivo único
+  const ext   = pdfFileAtual.name.split('.').pop();
+  const slug  = `${categoria}/${materia.toLowerCase().replace(/\s+/g, '-')}/${Date.now()}.${ext}`;
+
+  // Mostra progresso
+  document.getElementById('upload-progress').classList.remove('hidden');
+  document.getElementById('upload-progress-fill').style.width = '30%';
+  document.getElementById('upload-progress-text').textContent = 'Enviando para o Storage...';
+  document.getElementById('btn-upload-pdf').disabled = true;
+
+  try {
+    // 1️⃣  Upload para o Supabase Storage
+    const { data: storageData, error: storageErr } = await sb.storage
+      .from(STORAGE_BUCKET)
+      .upload(slug, pdfFileAtual, { contentType: 'application/pdf', upsert: false });
+
+    if (storageErr) throw new Error('Erro no Storage: ' + storageErr.message);
+
+    document.getElementById('upload-progress-fill').style.width = '65%';
+    document.getElementById('upload-progress-text').textContent = 'Obtendo URL pública...';
+
+    // 2️⃣  Obtém a URL pública do arquivo
+    const { data: urlData } = sb.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(slug);
+
+    const urlPdf = urlData.publicUrl;
+
+    document.getElementById('upload-progress-fill').style.width = '85%';
+    document.getElementById('upload-progress-text').textContent = 'Salvando no banco de dados...';
+
+    // 3️⃣  Salva os metadados na tabela do Supabase Database
+    const { error: dbErr } = await sb
+      .from('materiais_estudo')
+      .insert({
+        tipo:       categoria,   // 'escola' ou 'concurso'
+        materia:    materia,
+        titulo_aula: titulo,
+        url_pdf:    urlPdf
+      });
+
+    if (dbErr) throw new Error('Erro no banco de dados: ' + dbErr.message);
+
+    document.getElementById('upload-progress-fill').style.width = '100%';
+    document.getElementById('upload-progress-text').textContent = '✅ Enviado com sucesso!';
+
+    // Reseta o formulário
+    setTimeout(() => {
+      closeModal('add-materia-pdf-modal');
+      resetUploadForm();
+      // Recarrega a lista de PDFs se estiver na aba
+      if (estudosTabAtual === 'pdfs') carregarPdfs();
+    }, 900);
+
+  } catch (err) {
+    document.getElementById('upload-progress').classList.add('hidden');
+    document.getElementById('btn-upload-pdf').disabled = false;
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+    console.error('Erro no upload:', err);
+  }
+}
+
+function resetUploadForm() {
+  pdfFileAtual = null;
+  document.getElementById('pdf-materia').value = '';
+  document.getElementById('pdf-titulo').value = '';
+  document.getElementById('pdf-file-input').value = '';
+  document.getElementById('pdf-file-name').classList.add('hidden');
+  document.getElementById('upload-progress').classList.add('hidden');
+  document.getElementById('upload-progress-fill').style.width = '0%';
+  document.getElementById('upload-error').classList.add('hidden');
+  document.getElementById('btn-upload-pdf').disabled = false;
+  document.getElementById('upload-area').style.borderColor = '';
+}
+
+// ── Listagem de PDFs ──────────────────────────────────────────────────
+async function carregarPdfs() {
+  if (!estudosCategoriaAtual) return;
+
+  const loadingEl = document.getElementById('pdfs-loading');
+  const container = document.getElementById('pdfs-por-materia');
+
+  loadingEl.classList.remove('hidden');
+  container.innerHTML = '';
+
+  try {
+    // Busca os PDFs do tipo (categoria) atual
+    const { data, error } = await sb
+      .from('materiais_estudo')
+      .select('*')
+      .eq('tipo', estudosCategoriaAtual)
+      .order('materia', { ascending: true })
+      .order('created_at', { ascending: false });
+
+    loadingEl.classList.add('hidden');
+
+    if (error) throw error;
+
+    if (!data || !data.length) {
+      container.innerHTML = '<p class="empty-state">Nenhum PDF enviado ainda. Clique em "+ Nova Matéria / Upload PDF".</p>';
+
+      // Atualiza datalist de matérias (sem PDFs ainda, mas ok)
+      return;
+    }
+
+    // Agrupa por matéria
+    const grupos = {};
+    data.forEach(item => {
+      if (!grupos[item.materia]) grupos[item.materia] = [];
+      grupos[item.materia].push(item);
+    });
+
+    // Popula o datalist para autocomplete
+    const datalist = document.getElementById('pdf-materias-list');
+    datalist.innerHTML = Object.keys(grupos).map(m => `<option value="${m}">`).join('');
+
+    // Renderiza grupos
+    container.innerHTML = Object.entries(grupos).map(([materia, itens]) => `
+      <div class="pdfs-materia-grupo">
+        <div class="pdfs-materia-titulo">📂 ${materia} <span style="font-size:0.75rem;color:var(--text-dim);font-weight:400">(${itens.length} arquivo${itens.length > 1 ? 's' : ''})</span></div>
+        <div class="pdfs-lista">
+          ${itens.map(item => `
+            <div class="pdf-item" onclick="abrirPdf('${item.url_pdf}', '${escapeHtml(item.titulo_aula)}', '${escapeHtml(item.materia)}')">
+              <div class="pdf-item-icon">📄</div>
+              <div class="pdf-item-info">
+                <div class="pdf-item-titulo">${item.titulo_aula}</div>
+                <div class="pdf-item-meta">${formatarDataISO(item.created_at)}</div>
+              </div>
+              <span class="pdf-item-arrow">›</span>
+              <button class="btn-icon" onclick="event.stopPropagation(); deletarPdf(${item.id}, '${item.url_pdf}')" title="Remover">✕</button>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+
+  } catch (err) {
+    loadingEl.classList.add('hidden');
+    container.innerHTML = `<p class="empty-state" style="color:var(--saida)">Erro ao carregar PDFs: ${err.message}</p>`;
+    console.error('Erro ao carregar PDFs:', err);
+  }
+}
+
+// ── Visualizador de PDF ───────────────────────────────────────────────
+function abrirPdf(url, titulo, materia) {
+  document.getElementById('pdf-viewer-titulo').textContent = titulo;
+  document.getElementById('pdf-viewer-materia').textContent = `📂 ${materia}`;
+  document.getElementById('pdf-iframe').src = url;
+  document.getElementById('pdf-viewer-link').href = url;
+  openModal('pdf-viewer-modal');
+}
+
+// ── Deletar PDF ───────────────────────────────────────────────────────
+async function deletarPdf(id, urlPdf) {
+  if (!confirm('Remover este PDF permanentemente?')) return;
+
+  try {
+    // Extrai o caminho do Storage a partir da URL pública
+    const urlObj   = new URL(urlPdf);
+    const caminho  = urlObj.pathname.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`)[1];
+
+    // 1️⃣  Remove do Storage
+    if (caminho) {
+      await sb.storage.from(STORAGE_BUCKET).remove([caminho]);
+    }
+
+    // 2️⃣  Remove do banco
+    const { error } = await sb.from('materiais_estudo').delete().eq('id', id);
+    if (error) throw error;
+
+    // Recarrega a lista
+    carregarPdfs();
+  } catch (err) {
+    alert('Erro ao remover PDF: ' + err.message);
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function formatarDataISO(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
 // ══════════════════ FINANÇAS ══════════════════
@@ -457,10 +840,7 @@ function renderFinancas() {
   saldoEl.className = 'saldo-valor' + (fin.saldo < 0 ? ' negativo' : '');
 
   const list = document.getElementById('historico-list');
-  if (!fin.historico.length) {
-    list.innerHTML = '<p class="empty-state">Nenhuma transação ainda</p>';
-    return;
-  }
+  if (!fin.historico.length) { list.innerHTML = '<p class="empty-state">Nenhuma transação ainda</p>'; return; }
 
   list.innerHTML = fin.historico.map(item => `
     <div class="historico-item">
@@ -477,9 +857,7 @@ function renderFinancas() {
 async function addTransacao(tipo) {
   const valor     = parseFloat(document.getElementById('fin-valor').value);
   const descricao = document.getElementById('fin-descricao').value.trim();
-
   if (!valor || valor <= 0) return alert('Informe um valor válido.');
-
   const res = await api('POST', '/api/financas', { tipo, valor, descricao });
   if (res.success) {
     appData.financas = res.financas;
@@ -492,11 +870,7 @@ async function addTransacao(tipo) {
 
 async function deleteTransacao(id) {
   const res = await api('DELETE', `/api/financas/${id}`);
-  if (res.success) {
-    appData.financas = res.financas;
-    renderFinancas();
-    renderDashboard();
-  }
+  if (res.success) { appData.financas = res.financas; renderFinancas(); renderDashboard(); }
 }
 
 // ══════════════════ MÚSICA ══════════════════
@@ -507,7 +881,7 @@ function renderMusicas() {
   musicPlayer.playlists = data.playlists;
 
   const panel = document.getElementById('playlists-panel');
-  const empty = document.getElementById('playlists-empty');
+  if (!panel) return;
 
   if (!data.playlists.length) {
     panel.innerHTML = '<p class="empty-state" id="playlists-empty">Nenhuma playlist ainda. Crie a primeira!</p>';
@@ -552,12 +926,7 @@ async function addPlaylist() {
   const nome = document.getElementById('nova-playlist-nome').value.trim();
   if (!nome) return;
   const res = await api('POST', '/api/musicas/playlist', { nome });
-  if (res.success) {
-    appData.musicas = res.musicas;
-    renderMusicas();
-    renderDashboard();
-    closeModal('add-playlist-modal');
-  }
+  if (res.success) { appData.musicas = res.musicas; renderMusicas(); renderDashboard(); closeModal('add-playlist-modal'); }
 }
 
 async function deletePlaylist(id) {
@@ -582,15 +951,8 @@ async function addMusica() {
   const titulo = document.getElementById('nova-musica-titulo').value.trim();
   const link   = document.getElementById('nova-musica-link').value.trim();
   if (!titulo) return alert('Informe o título da música.');
-
   const res = await api('POST', `/api/musicas/playlist/${addMusicaPlaylistId}/musica`, { titulo, link });
-  if (res.success) {
-    appData.musicas = res.musicas;
-    musicPlayer.playlists = appData.musicas.playlists;
-    renderMusicas();
-    renderDashboard();
-    closeModal('add-musica-modal');
-  }
+  if (res.success) { appData.musicas = res.musicas; musicPlayer.playlists = appData.musicas.playlists; renderMusicas(); renderDashboard(); closeModal('add-musica-modal'); }
 }
 
 async function deleteSong(playlistId, musicaId) {
@@ -604,154 +966,95 @@ async function deleteSong(playlistId, musicaId) {
   }
 }
 
-// ── Music Player ─────────────────────────────────────────────────────
-
-// Detecta se o link é um arquivo de áudio direto
+// ── Music Player ──────────────────────────────────────────────────────
 function isDirectAudioLink(url) {
   if (!url) return false;
   try {
     const pathname = new URL(url).pathname.toLowerCase();
     return /\.(mp3|ogg|wav|aac|flac|m4a|opus|webm)(\?.*)?$/.test(pathname);
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
-// Para o áudio atual e limpa os event listeners
 function stopCurrentAudio() {
   clearInterval(musicPlayer.progressTimer);
-  if (musicPlayer.audio) {
-    musicPlayer.audio.pause();
-    musicPlayer.audio.src = '';
-    musicPlayer.audio = null;
-  }
+  if (musicPlayer.audio) { musicPlayer.audio.pause(); musicPlayer.audio.src = ''; musicPlayer.audio = null; }
 }
 
 function playSong(playlistIdx, songIdx) {
   const playlist = musicPlayer.playlists[playlistIdx];
   if (!playlist || !playlist.musicas[songIdx]) return;
-
   stopCurrentAudio();
-
   musicPlayer.currentPlaylistIdx = playlistIdx;
   musicPlayer.currentSongIdx     = songIdx;
   musicPlayer.playing = true;
-
   const song = playlist.musicas[songIdx];
-
   if (song.link && isDirectAudioLink(song.link)) {
-    // ✅ Link de áudio direto — toca de verdade
     const audio = new Audio(song.link);
     audio.crossOrigin = 'anonymous';
     musicPlayer.audio = audio;
-
     audio.addEventListener('timeupdate', () => {
       if (audio.duration) {
         const pct = (audio.currentTime / audio.duration) * 100;
-        document.getElementById('progress-fill').style.width = pct + '%';
+        const pf = document.getElementById('progress-fill');
+        if (pf) pf.style.width = pct + '%';
       }
     });
-
-    audio.addEventListener('ended', () => {
-      nextMusica();
-    });
-
-    audio.addEventListener('error', () => {
-      console.warn('Erro ao carregar áudio. Verifique o link e o CORS do servidor.');
-      // Mostra botão de link externo como fallback
-      updatePlayerUI();
-    });
-
-    audio.play().catch(err => {
-      console.warn('Autoplay bloqueado pelo navegador:', err);
-      musicPlayer.playing = false;
-      updatePlayerUI();
-      renderMusicas();
-    });
-
+    audio.addEventListener('ended', () => { nextMusica(); });
+    audio.addEventListener('error', () => { updatePlayerUI(); });
+    audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); renderMusicas(); });
   } else if (song.link) {
-    // ⚠️ Link externo (YouTube, Spotify) — não é possível tocar diretamente
-    // Exibe o link para abrir externamente e simula progresso visual
     startProgressSimulation();
   }
-  // Se não tem link, apenas mostra o nome sem áudio
-
   updatePlayerUI();
   renderMusicas();
 }
 
-// Simulação de progresso para links externos (YouTube, Spotify etc.)
 function startProgressSimulation() {
   clearInterval(musicPlayer.progressTimer);
   const bar = document.getElementById('progress-fill');
+  if (!bar) return;
   let pct = parseFloat(bar.style.width) || 0;
-
   musicPlayer.progressTimer = setInterval(() => {
     if (!musicPlayer.playing) return;
-    pct = Math.min(pct + 100 / 210, 100); // simula ~3.5 min
+    pct = Math.min(pct + 100 / 210, 100);
     bar.style.width = pct + '%';
-    if (pct >= 100) {
-      clearInterval(musicPlayer.progressTimer);
-      nextMusica();
-    }
+    if (pct >= 100) { clearInterval(musicPlayer.progressTimer); nextMusica(); }
   }, 1000);
 }
 
 function updatePlayerUI() {
   const pl   = musicPlayer.playlists[musicPlayer.currentPlaylistIdx];
   const song = pl?.musicas[musicPlayer.currentSongIdx];
-
-  document.getElementById('player-titulo').textContent   = song?.titulo || 'Nenhuma música';
-  document.getElementById('player-playlist').textContent = pl?.nome || '—';
-
-  // Reseta barra se nova música
-  if (!musicPlayer.audio) {
-    document.getElementById('progress-fill').style.width = '0%';
+  const tituloEl = document.getElementById('player-titulo');
+  const playlistEl = document.getElementById('player-playlist');
+  if (tituloEl)   tituloEl.textContent   = song?.titulo || 'Nenhuma música';
+  if (playlistEl) playlistEl.textContent = pl?.nome || '—';
+  if (!musicPlayer.audio) { const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = '0%'; }
+  const linkEl  = document.getElementById('player-link');
+  const iconPlay  = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  if (linkEl) {
+    const showLink = song?.link && !isDirectAudioLink(song.link);
+    if (showLink) { linkEl.href = song.link; linkEl.textContent = '▶ Abrir no YouTube / Spotify ↗'; linkEl.classList.remove('hidden'); }
+    else { linkEl.classList.add('hidden'); }
   }
-
-  // Botão de link externo: só mostra se NÃO for áudio direto
-  const linkEl = document.getElementById('player-link');
-  const showLink = song?.link && !isDirectAudioLink(song.link);
-  if (showLink) {
-    linkEl.href = song.link;
-    linkEl.textContent = '▶ Abrir no YouTube / Spotify ↗';
-    linkEl.classList.remove('hidden');
-  } else if (song?.link && isDirectAudioLink(song.link)) {
-    linkEl.classList.add('hidden');
-  } else {
-    linkEl.classList.add('hidden');
-  }
-
-  document.getElementById('icon-play').classList.toggle('hidden', musicPlayer.playing);
-  document.getElementById('icon-pause').classList.toggle('hidden', !musicPlayer.playing);
+  if (iconPlay)  iconPlay.classList.toggle('hidden', musicPlayer.playing);
+  if (iconPause) iconPause.classList.toggle('hidden', !musicPlayer.playing);
 }
 
 function togglePlay() {
   if (musicPlayer.currentSongIdx === -1) {
-    if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) {
-      playSong(0, 0);
-    }
+    if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) playSong(0, 0);
     return;
   }
-
   musicPlayer.playing = !musicPlayer.playing;
-
   if (musicPlayer.audio) {
-    // Áudio real
-    if (musicPlayer.playing) {
-      musicPlayer.audio.play().catch(() => {
-        musicPlayer.playing = false;
-        updatePlayerUI();
-      });
-    } else {
-      musicPlayer.audio.pause();
-    }
+    if (musicPlayer.playing) musicPlayer.audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); });
+    else musicPlayer.audio.pause();
   } else {
-    // Simulação (link externo)
     if (musicPlayer.playing) startProgressSimulation();
     else clearInterval(musicPlayer.progressTimer);
   }
-
   updatePlayerUI();
   renderMusicas();
 }
@@ -759,55 +1062,38 @@ function togglePlay() {
 function nextMusica() {
   const pl = musicPlayer.playlists[musicPlayer.currentPlaylistIdx];
   if (!pl) return;
-
-  let nextIdx;
-  if (musicPlayer.shuffle) {
-    nextIdx = Math.floor(Math.random() * pl.musicas.length);
-  } else {
-    nextIdx = (musicPlayer.currentSongIdx + 1) % pl.musicas.length;
-  }
+  let nextIdx = musicPlayer.shuffle ? Math.floor(Math.random() * pl.musicas.length) : (musicPlayer.currentSongIdx + 1) % pl.musicas.length;
   playSong(musicPlayer.currentPlaylistIdx, nextIdx);
 }
 
 function prevMusica() {
   const pl = musicPlayer.playlists[musicPlayer.currentPlaylistIdx];
   if (!pl) return;
-
-  // Se passou de 3s ou 10% → recomeça a música atual
   const currentTime = musicPlayer.audio?.currentTime || 0;
-  const progress    = parseFloat(document.getElementById('progress-fill').style.width) || 0;
+  const progress    = parseFloat(document.getElementById('progress-fill')?.style.width) || 0;
   if (currentTime > 3 || progress > 10) {
-    if (musicPlayer.audio) {
-      musicPlayer.audio.currentTime = 0;
-    } else {
-      document.getElementById('progress-fill').style.width = '0%';
-      startProgressSimulation();
-    }
+    if (musicPlayer.audio) musicPlayer.audio.currentTime = 0;
+    else { const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = '0%'; startProgressSimulation(); }
     return;
   }
-
-  let prevIdx;
-  if (musicPlayer.shuffle) {
-    prevIdx = Math.floor(Math.random() * pl.musicas.length);
-  } else {
-    prevIdx = (musicPlayer.currentSongIdx - 1 + pl.musicas.length) % pl.musicas.length;
-  }
+  let prevIdx = musicPlayer.shuffle ? Math.floor(Math.random() * pl.musicas.length) : (musicPlayer.currentSongIdx - 1 + pl.musicas.length) % pl.musicas.length;
   playSong(musicPlayer.currentPlaylistIdx, prevIdx);
 }
 
 function toggleShuffle() {
   musicPlayer.shuffle = !musicPlayer.shuffle;
   if (musicPlayer.shuffle) musicPlayer.order = false;
-  document.getElementById('ctrl-shuffle').classList.toggle('active', musicPlayer.shuffle);
-  document.getElementById('ctrl-order').classList.toggle('active', musicPlayer.order);
+  document.getElementById('ctrl-shuffle')?.classList.toggle('active', musicPlayer.shuffle);
+  document.getElementById('ctrl-order')?.classList.toggle('active', musicPlayer.order);
 }
 
 function toggleOrder() {
   musicPlayer.order = !musicPlayer.order;
   if (musicPlayer.order) musicPlayer.shuffle = false;
-  document.getElementById('ctrl-order').classList.toggle('active', musicPlayer.order);
-  document.getElementById('ctrl-shuffle').classList.toggle('active', musicPlayer.shuffle);
+  document.getElementById('ctrl-order')?.classList.toggle('active', musicPlayer.order);
+  document.getElementById('ctrl-shuffle')?.classList.toggle('active', musicPlayer.shuffle);
 }
+
 // ══════════════════ CLIMA ══════════════════
 let climaData = null;
 
@@ -816,7 +1102,6 @@ function getWeatherIcon(code) {
   if (code <= 2) return '⛅';
   if (code === 3) return '☁️';
   if (code <= 48) return '🌫️';
-  if (code <= 57) return '🌧️';
   if (code <= 67) return '🌧️';
   if (code <= 77) return '🌨️';
   if (code <= 82) return '🌦️';
@@ -846,7 +1131,6 @@ async function loadClima() {
   const loading = document.getElementById('clima-loading');
   const content = document.getElementById('clima-content');
   const errDiv  = document.getElementById('clima-error');
-
   loading.classList.remove('hidden');
   content.classList.add('hidden');
   errDiv.classList.add('hidden');
@@ -861,39 +1145,31 @@ async function loadClima() {
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude, longitude } = pos.coords;
     try {
-      // Busca o nome da cidade com geocodificação reversa
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+      const geoRes  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
       const geoData = await geoRes.json();
-      const cidade = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || 'Sua localização';
-      const estado = geoData.address?.state || '';
+      const cidade  = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || 'Sua localização';
+      const estado  = geoData.address?.state || '';
       document.getElementById('clima-cidade-label').textContent = `📍 ${cidade}${estado ? ', ' + estado : ''}`;
 
-      // Busca previsão 5 dias (open-meteo — gratuito, sem chave)
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
-      const wRes = await fetch(url);
+      const url   = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
+      const wRes  = await fetch(url);
       const wData = await wRes.json();
-
-      const cur = wData.current;
+      const cur   = wData.current;
       const daily = wData.daily;
 
-      // Hoje (card grande)
-      document.getElementById('clima-temp-hoje').textContent = Math.round(cur.temperature_2m) + '°C';
-      document.getElementById('clima-desc-hoje').textContent = getWeatherDesc(cur.weather_code);
-      document.getElementById('clima-icon-hoje').textContent = getWeatherIcon(cur.weather_code);
-      document.getElementById('clima-feels').textContent = `Sensação: ${Math.round(cur.apparent_temperature)}°C`;
-      document.getElementById('clima-umidade').textContent = `${cur.relative_humidity_2m}% umidade`;
-      document.getElementById('clima-vento').textContent = `${Math.round(cur.wind_speed_10m)} km/h vento`;
+      document.getElementById('clima-temp-hoje').textContent  = Math.round(cur.temperature_2m) + '°C';
+      document.getElementById('clima-desc-hoje').textContent  = getWeatherDesc(cur.weather_code);
+      document.getElementById('clima-icon-hoje').textContent  = getWeatherIcon(cur.weather_code);
+      document.getElementById('clima-feels').textContent      = `Sensação: ${Math.round(cur.apparent_temperature)}°C`;
+      document.getElementById('clima-umidade').textContent    = `${cur.relative_humidity_2m}% umidade`;
+      document.getElementById('clima-vento').textContent      = `${Math.round(cur.wind_speed_10m)} km/h vento`;
       const vis = cur.visibility >= 1000 ? (cur.visibility/1000).toFixed(0) + ' km' : cur.visibility + ' m';
-      document.getElementById('clima-visib').textContent = `${vis} visib.`;
+      document.getElementById('clima-visib').textContent      = `${vis} visib.`;
+      document.getElementById('dash-clima-icon').textContent  = getWeatherIcon(cur.weather_code);
+      document.getElementById('dash-clima-info').textContent  = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
 
-      // Dashboard mini
-      document.getElementById('dash-clima-icon').textContent = getWeatherIcon(cur.weather_code);
-      document.getElementById('dash-clima-info').textContent = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
-
-      // Próximos dias
       const diasNomes = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-      const forecastEl = document.getElementById('clima-forecast');
-      forecastEl.innerHTML = daily.time.map((dateStr, i) => {
+      document.getElementById('clima-forecast').innerHTML = daily.time.map((dateStr, i) => {
         const d = new Date(dateStr + 'T12:00:00');
         const isHoje = i === 0;
         return `
@@ -918,7 +1194,7 @@ async function loadClima() {
   }, () => {
     loading.classList.add('hidden');
     errDiv.classList.remove('hidden');
-    document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada. Habilite nas configurações do navegador.';
+    document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada.';
   });
 }
 
@@ -941,10 +1217,7 @@ async function addNota() {
 function renderNotas() {
   const notas = getNotas();
   const lista = document.getElementById('notas-lista');
-  if (!notas.length) {
-    lista.innerHTML = '<p class="empty-state">Nenhuma nota ainda</p>';
-    return;
-  }
+  if (!notas.length) { lista.innerHTML = '<p class="empty-state">Nenhuma nota ainda</p>'; return; }
   lista.innerHTML = notas.map(n => `
     <div class="nota-item ${notaAtualId === n.id ? 'active' : ''}" onclick="abrirNota(${n.id})">
       <div class="nota-item-titulo">${n.titulo || 'Sem título'}</div>
@@ -973,11 +1246,7 @@ function autoSaveNota() {
     const titulo   = document.getElementById('nota-titulo-edit')?.value || 'Sem título';
     const conteudo = document.getElementById('nota-conteudo-edit')?.value || '';
     const res = await api('PATCH', `/api/notas/${notaAtualId}`, { titulo, conteudo });
-    if (res.success) {
-      appData.notas = res.notas;
-      renderNotas();
-      renderDashboard();
-    }
+    if (res.success) { appData.notas = res.notas; renderNotas(); renderDashboard(); }
   }, 800);
 }
 
@@ -1010,7 +1279,7 @@ function renderLivros() {
   const filtrados = getLivros().filter(l => l.status === livroTabAtual);
   const grid = document.getElementById('livros-grid');
   if (!filtrados.length) {
-    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado como lido ainda.'}</p>`;
+    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado.'}</p>`;
     return;
   }
   grid.innerHTML = filtrados.map(l => `
@@ -1067,26 +1336,23 @@ function calNavMes(dir) {
 function renderCalendario() {
   const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   document.getElementById('cal-mes-label').textContent = `${meses[calMes]} ${calAno}`;
-
-  const eventos = getEventos();
-  const hoje = new Date();
+  const eventos     = getEventos();
+  const hoje        = new Date();
   const primeiroDia = new Date(calAno, calMes, 1).getDay();
-  const diasNoMes = new Date(calAno, calMes + 1, 0).getDate();
+  const diasNoMes   = new Date(calAno, calMes + 1, 0).getDate();
 
   let html = '';
   for (let i = 0; i < primeiroDia; i++) html += '<div class="cal-day vazio"></div>';
-
   for (let d = 1; d <= diasNoMes; d++) {
-    const chave = `${calAno}-${calMes}-${d}`;
+    const chave    = `${calAno}-${calMes}-${d}`;
     const temEvento = (eventos[chave] || []).length > 0;
-    const isHoje = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
-    const isSel = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
+    const isHoje   = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
+    const isSel    = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
     html += `<div class="cal-day ${isHoje ? 'cal-hoje' : ''} ${isSel ? 'cal-selecionado' : ''}" onclick="selecionarDia(${d})">
       <span>${d}</span>
       ${temEvento ? '<div class="cal-dot"></div>' : ''}
     </div>`;
   }
-
   document.getElementById('cal-days').innerHTML = html;
   if (calDiaSelecionado) renderEventosDia();
 }
@@ -1094,22 +1360,18 @@ function renderCalendario() {
 function selecionarDia(d) {
   calDiaSelecionado = { d, m: calMes, a: calAno };
   renderCalendario();
-  const painel = document.getElementById('cal-eventos-hoje');
-  painel.style.display = 'block';
+  document.getElementById('cal-eventos-hoje').style.display = 'block';
   renderEventosDia();
 }
 
 function renderEventosDia() {
   const { d, m, a } = calDiaSelecionado;
-  const chave = `${a}-${m}-${d}`;
+  const chave  = `${a}-${m}-${d}`;
   const eventos = getEventos()[chave] || [];
-  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const meses  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   document.getElementById('cal-eventos-titulo').textContent = `${d} de ${meses[m]}`;
   const lista = document.getElementById('cal-eventos-lista');
-  if (!eventos.length) {
-    lista.innerHTML = '<p class="empty-state" style="padding:0.8rem 0">Nenhum evento neste dia</p>';
-    return;
-  }
+  if (!eventos.length) { lista.innerHTML = '<p class="empty-state" style="padding:0.8rem 0">Nenhum evento neste dia</p>'; return; }
   lista.innerHTML = eventos.map(ev => `
     <div class="evento-item">
       <div class="evento-dot"></div>
@@ -1135,21 +1397,10 @@ async function addEvento() {
   const { d, m, a } = calDiaSelecionado;
   const chave = `${a}-${m}-${d}`;
   const res = await api('POST', `/api/eventos/${chave}`, { titulo, hora });
-  if (res.success) {
-    appData.eventos = res.eventos;
-    renderCalendario();
-    renderEventosDia();
-    renderDashboard();
-    closeModal('add-evento-modal');
-  }
+  if (res.success) { appData.eventos = res.eventos; renderCalendario(); renderEventosDia(); renderDashboard(); closeModal('add-evento-modal'); }
 }
 
 async function deletaEvento(chave, id) {
   const res = await api('DELETE', `/api/eventos/${chave}/${id}`);
-  if (res.success) {
-    appData.eventos = res.eventos;
-    renderCalendario();
-    renderEventosDia();
-    renderDashboard();
-  }
+  if (res.success) { appData.eventos = res.eventos; renderCalendario(); renderEventosDia(); renderDashboard(); }
 }
