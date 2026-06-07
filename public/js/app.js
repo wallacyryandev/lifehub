@@ -38,7 +38,8 @@ let musicPlayer = {
 async function api(method, url, body = null) {
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include'
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
@@ -109,8 +110,6 @@ function updateDashDate() {
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────
-
-
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const activeForm = document.querySelector('.auth-form.active');
@@ -196,46 +195,37 @@ function closeSidebar() {
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-
-
 // ══════════════════ DASHBOARD ══════════════════
 function renderDashboard() {
   if (!appData) return;
 
-  // Treino
   const hoje = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date().getDay()];
   const treinoHoje = appData.treino?.[hoje] || [];
   document.getElementById('dash-treino-info').textContent =
     treinoHoje.length ? `${treinoHoje.length} exercício(s) hoje` : 'Nenhum treino hoje';
 
-  // Estudos
   const mats = appData.estudos || [];
   const totalTop = mats.reduce((a, m) => a + m.topicos.length, 0);
   const doneTop  = mats.reduce((a, m) => a + m.topicos.filter(t => t.concluido).length, 0);
   document.getElementById('dash-estudos-info').textContent =
     mats.length ? `${doneTop}/${totalTop} tópicos concluídos` : 'Nenhuma matéria ainda';
 
-  // Finanças
   const saldo = appData.financas?.saldo || 0;
   document.getElementById('dash-saldo').textContent = formatMoney(saldo);
 
-  // Músicas
   const pls = appData.musicas?.playlists || [];
   const totalSongs = pls.reduce((a, p) => a + p.musicas.length, 0);
   const dashMusEl = document.getElementById('dash-musicas-info');
   if (dashMusEl) dashMusEl.textContent = pls.length ? `${pls.length} playlist(s), ${totalSongs} música(s)` : 'Nenhuma playlist ainda';
 
-  // Notas
   const notas = getNotas();
   document.getElementById('dash-notas-info').textContent = notas.length ? `${notas.length} nota(s)` : 'Nenhuma nota ainda';
 
-  // Livros
   const livros = getLivros();
   const lendo = livros.filter(l => l.status === 'lendo').length;
   const lidos = livros.filter(l => l.status === 'lido').length;
   document.getElementById('dash-livros-info').textContent = livros.length ? `${lendo} lendo · ${lidos} lido(s)` : 'Nenhum livro ainda';
 
-  // Eventos hoje
   const hoje2 = new Date();
   const chaveHoje = `${hoje2.getFullYear()}-${hoje2.getMonth()}-${hoje2.getDate()}`;
   const eventos = getEventos()[chaveHoje] || [];
@@ -245,19 +235,14 @@ function renderDashboard() {
 // ══════════════════ TREINO ══════════════════
 const diasSemana = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 
-// ── Submenu Treino ────────────────────────────────────────────────────
 function toggleTreinoSubmenu(btn) {
   const submenu = document.getElementById('treino-submenu');
   const isOpen  = submenu.classList.contains('open');
-
-  // Fecha outros submenus
   document.querySelectorAll('.submenu').forEach(s => s.classList.remove('open'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
   if (!isOpen) {
     submenu.classList.add('open');
     if (btn) btn.classList.add('active');
-    // Vai para o módulo treino e mostra seletor
     switchModule('treino', btn);
     mostrarTreinoSelector();
   }
@@ -270,24 +255,16 @@ function mostrarTreinoSelector() {
   treinoTipoAtual = null;
 }
 
-function voltarTreinoSelector() {
-  mostrarTreinoSelector();
-}
+function voltarTreinoSelector() { mostrarTreinoSelector(); }
 
 function switchTreinoTipo(tipo, btn) {
   treinoTipoAtual = tipo;
-
-  // Abre o módulo treino se ainda não estiver aberto
   if (currentModule !== 'treino') switchModule('treino', document.querySelector('[data-module=treino]'));
-
-  // Ativa o subitem correto
   document.querySelectorAll('.nav-subitem').forEach(s => s.classList.remove('active'));
   if (btn) btn.classList.add('active');
-
   document.getElementById('treino-tipo-selector').classList.add('hidden');
   document.getElementById('treino-academia').classList.add('hidden');
   document.getElementById('treino-taf').classList.add('hidden');
-
   if (tipo === 'academia') {
     document.getElementById('treino-academia').classList.remove('hidden');
     renderTreinoAcademia();
@@ -298,16 +275,12 @@ function switchTreinoTipo(tipo, btn) {
   closeSidebar();
 }
 
-// ── Academia ──────────────────────────────────────────────────────────
-function renderTreino() {
-  renderTreinoAcademia();
-}
+function renderTreino() { renderTreinoAcademia(); }
 
 function renderTreinoAcademia() {
   const grid = document.getElementById('treino-grid-academia');
   if (!grid) return;
   const hoje = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date().getDay()];
-
   grid.innerHTML = diasSemana.map(dia => {
     const exercicios = appData?.treino?.[dia] || [];
     const isHoje = dia === hoje;
@@ -331,10 +304,7 @@ function openTreinoModal(dia) {
 function renderExerciseList(dia) {
   const list = document.getElementById('exercise-list');
   const exercicios = appData?.treino?.[dia] || [];
-  if (!exercicios.length) {
-    list.innerHTML = '<p class="empty-state">Nenhum exercício registrado</p>';
-    return;
-  }
+  if (!exercicios.length) { list.innerHTML = '<p class="empty-state">Nenhum exercício registrado</p>'; return; }
   list.innerHTML = exercicios.map(ex => `
     <div class="exercise-item">
       <div class="exercise-info">
@@ -382,7 +352,6 @@ function renderTaf() {
     grid.innerHTML = '<p class="empty-state" style="grid-column:1/-1">Nenhum registro de TAF ainda. Clique em "+ Novo Registro".</p>';
     return;
   }
-  // Ordena por data decrescente
   const sorted = [...registros].sort((a, b) => new Date(b.data) - new Date(a.data));
   grid.innerHTML = sorted.map(r => `
     <div class="bento-card taf-card">
@@ -390,21 +359,9 @@ function renderTaf() {
         <span class="taf-card-data">📅 ${formatarData(r.data)}</span>
         <button class="btn-icon" onclick="deleteTaf(${r.id})">✕</button>
       </div>
-      <div class="taf-stat">
-        <span>🏃</span>
-        <span class="taf-stat-label">Corrida 12 min</span>
-        <span class="taf-stat-val">${r.corrida ? r.corrida + ' m' : '—'}</span>
-      </div>
-      <div class="taf-stat">
-        <span>💪</span>
-        <span class="taf-stat-label">Flexão de braço</span>
-        <span class="taf-stat-val">${r.flexao ?? '—'} rep</span>
-      </div>
-      <div class="taf-stat">
-        <span>🤸</span>
-        <span class="taf-stat-label">Abdominal</span>
-        <span class="taf-stat-val">${r.abdominal ?? '—'} rep</span>
-      </div>
+      <div class="taf-stat"><span>🏃</span><span class="taf-stat-label">Corrida 12 min</span><span class="taf-stat-val">${r.corrida ? r.corrida + ' m' : '—'}</span></div>
+      <div class="taf-stat"><span>💪</span><span class="taf-stat-label">Flexão de braço</span><span class="taf-stat-val">${r.flexao ?? '—'} rep</span></div>
+      <div class="taf-stat"><span>🤸</span><span class="taf-stat-label">Abdominal</span><span class="taf-stat-val">${r.abdominal ?? '—'} rep</span></div>
       ${r.obs ? `<p class="taf-obs">"${r.obs}"</p>` : ''}
     </div>`).join('');
 }
@@ -421,9 +378,7 @@ async function addTaf() {
   const flexao    = document.getElementById('taf-flexao').value;
   const abdominal = document.getElementById('taf-abdominal').value;
   const obs       = document.getElementById('taf-obs').value.trim();
-
   if (!data) return alert('Informe a data do TAF.');
-
   const res = await api('POST', '/api/taf', { data, corrida: corrida || null, flexao: flexao || null, abdominal: abdominal || null, obs });
   if (res.success) {
     appData.taf = res.taf;
@@ -440,23 +395,17 @@ async function addTaf() {
 async function deleteTaf(id) {
   if (!confirm('Remover este registro TAF?')) return;
   const res = await api('DELETE', `/api/taf/${id}`);
-  if (res.success) {
-    appData.taf = appData.taf.filter(r => r.id != id);
-    renderTaf();
-  }
+  if (res.success) { appData.taf = appData.taf.filter(r => r.id != id); renderTaf(); }
 }
 
 // ══════════════════ ESTUDOS ══════════════════
 let estudosCurrentMateria = null;
 
-// ── Submenu Estudos ───────────────────────────────────────────────────
 function toggleEstudosSubmenu(btn) {
   const submenu = document.getElementById('estudos-submenu');
   const isOpen  = submenu.classList.contains('open');
-
   document.querySelectorAll('.submenu').forEach(s => s.classList.remove('open'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
   if (!isOpen) {
     submenu.classList.add('open');
     if (btn) btn.classList.add('active');
@@ -471,27 +420,19 @@ function mostrarEstudosSelector() {
   estudosCategoriaAtual = null;
 }
 
-function voltarEstudosSelector() {
-  mostrarEstudosSelector();
-}
+function voltarEstudosSelector() { mostrarEstudosSelector(); }
 
 function switchEstudosCategoria(categoria, btn) {
   estudosCategoriaAtual = categoria;
-
   if (currentModule !== 'estudos') switchModule('estudos', document.querySelector('[data-module=estudos]'));
-
   document.querySelectorAll('.nav-subitem').forEach(s => s.classList.remove('active'));
   if (btn) btn.classList.add('active');
-
   document.getElementById('estudos-categoria-selector').classList.add('hidden');
   document.getElementById('estudos-categoria-content').classList.remove('hidden');
-
   const label = categoria === 'escola' ? '🏫 Escola' : '📋 Concurso';
   document.getElementById('estudos-categoria-titulo').textContent = label;
   document.getElementById('estudos-categoria-sub').textContent =
     categoria === 'escola' ? 'Matérias escolares e tópicos de estudo' : 'Matérias e PDFs para concursos';
-
-  // Volta para aba tópicos por padrão
   switchEstudosTab('topicos', document.querySelector('.estudos-tab'));
   renderEstudos();
   closeSidebar();
@@ -501,24 +442,19 @@ function switchEstudosTab(tab, btn) {
   estudosTabAtual = tab;
   document.querySelectorAll('.estudos-tab').forEach(t => t.classList.remove('active'));
   if (btn) btn.classList.add('active');
-
   document.getElementById('estudos-tab-topicos').classList.toggle('hidden', tab !== 'topicos');
   document.getElementById('estudos-tab-pdfs').classList.toggle('hidden', tab !== 'pdfs');
-
   if (tab === 'pdfs') carregarPdfs();
 }
 
-// ── Tópicos ───────────────────────────────────────────────────────────
 function renderEstudos() {
   const grid = document.getElementById('estudos-grid');
   if (!grid) return;
   const materias = appData?.estudos || [];
-
   if (!materias.length) {
     grid.innerHTML = '<p class="empty-state" style="grid-column:1/-1">Nenhuma matéria ainda. Crie a primeira!</p>';
     return;
   }
-
   grid.innerHTML = materias.map(mat => {
     const total = mat.topicos.length;
     const done  = mat.topicos.filter(t => t.concluido).length;
@@ -547,22 +483,13 @@ async function addMateria() {
   const nome = document.getElementById('nova-materia-nome').value.trim();
   if (!nome) return;
   const res = await api('POST', '/api/estudos/materia', { nome });
-  if (res.success) {
-    appData.estudos = res.estudos;
-    renderEstudos();
-    renderDashboard();
-    closeModal('add-materia-modal');
-  }
+  if (res.success) { appData.estudos = res.estudos; renderEstudos(); renderDashboard(); closeModal('add-materia-modal'); }
 }
 
 async function deleteMateria(id) {
   if (!confirm('Remover esta matéria e todos os tópicos?')) return;
   const res = await api('DELETE', `/api/estudos/${id}`);
-  if (res.success) {
-    appData.estudos = appData.estudos.filter(m => m.id != id);
-    renderEstudos();
-    renderDashboard();
-  }
+  if (res.success) { appData.estudos = appData.estudos.filter(m => m.id != id); renderEstudos(); renderDashboard(); }
 }
 
 function openMateriaModal(materiaId) {
@@ -618,20 +545,16 @@ async function deleteTopico(materiaId, topicoId) {
   }
 }
 
-// ══════════════════ ESTUDOS — SISTEMA DE PDFs (SUPABASE) ══════════════════
-
-// ── Upload ────────────────────────────────────────────────────────────
+// ══════════════════ ESTUDOS — PDFs ══════════════════
 let pdfFileAtual = null;
 
 function onPdfFileSelected(input) {
   const file = input.files[0];
   if (!file) return;
   pdfFileAtual = file;
-
   const nameEl = document.getElementById('pdf-file-name');
   nameEl.classList.remove('hidden');
   nameEl.innerHTML = `📄 ${file.name} <span style="color:var(--text-dim);font-size:0.75rem">(${(file.size / 1024).toFixed(0)} KB)</span>`;
-
   document.getElementById('upload-area').style.borderColor = 'var(--accent2)';
 }
 
@@ -640,73 +563,37 @@ async function uploadPdf() {
   const titulo  = document.getElementById('pdf-titulo').value.trim();
   const errEl   = document.getElementById('upload-error');
   errEl.classList.add('hidden');
-
   if (!materia) { errEl.textContent = 'Informe o nome da matéria.'; return errEl.classList.remove('hidden'); }
   if (!titulo)  { errEl.textContent = 'Informe o título da aula.';  return errEl.classList.remove('hidden'); }
   if (!pdfFileAtual) { errEl.textContent = 'Selecione um arquivo PDF.'; return errEl.classList.remove('hidden'); }
-
   const categoria = estudosCategoriaAtual || 'escola';
-
-  // Cria um nome de arquivo único
   const ext   = pdfFileAtual.name.split('.').pop();
   const slug  = `${categoria}/${materia.toLowerCase().replace(/\s+/g, '-')}/${Date.now()}.${ext}`;
-
-  // Mostra progresso
   document.getElementById('upload-progress').classList.remove('hidden');
   document.getElementById('upload-progress-fill').style.width = '30%';
   document.getElementById('upload-progress-text').textContent = 'Enviando para o Storage...';
   document.getElementById('btn-upload-pdf').disabled = true;
-
   try {
-    // 1️⃣  Upload para o Supabase Storage
     const { data: storageData, error: storageErr } = await sb.storage
       .from(STORAGE_BUCKET)
       .upload(slug, pdfFileAtual, { contentType: 'application/pdf', upsert: false });
-
     if (storageErr) throw new Error('Erro no Storage: ' + storageErr.message);
-
     document.getElementById('upload-progress-fill').style.width = '65%';
     document.getElementById('upload-progress-text').textContent = 'Obtendo URL pública...';
-
-    // 2️⃣  Obtém a URL pública do arquivo
-    const { data: urlData } = sb.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(slug);
-
+    const { data: urlData } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(slug);
     const urlPdf = urlData.publicUrl;
-
     document.getElementById('upload-progress-fill').style.width = '85%';
     document.getElementById('upload-progress-text').textContent = 'Salvando no banco de dados...';
-
-    // 3️⃣  Salva os metadados na tabela do Supabase Database
-    const { error: dbErr } = await sb
-      .from('materiais_estudo')
-      .insert({
-        tipo:       categoria,   // 'escola' ou 'concurso'
-        materia:    materia,
-        titulo_aula: titulo,
-        url_pdf:    urlPdf
-      });
-
+    const { error: dbErr } = await sb.from('materiais_estudo').insert({ tipo: categoria, materia, titulo_aula: titulo, url_pdf: urlPdf });
     if (dbErr) throw new Error('Erro no banco de dados: ' + dbErr.message);
-
     document.getElementById('upload-progress-fill').style.width = '100%';
     document.getElementById('upload-progress-text').textContent = '✅ Enviado com sucesso!';
-
-    // Reseta o formulário
-    setTimeout(() => {
-      closeModal('add-materia-pdf-modal');
-      resetUploadForm();
-      // Recarrega a lista de PDFs se estiver na aba
-      if (estudosTabAtual === 'pdfs') carregarPdfs();
-    }, 900);
-
+    setTimeout(() => { closeModal('add-materia-pdf-modal'); resetUploadForm(); if (estudosTabAtual === 'pdfs') carregarPdfs(); }, 900);
   } catch (err) {
     document.getElementById('upload-progress').classList.add('hidden');
     document.getElementById('btn-upload-pdf').disabled = false;
     errEl.textContent = err.message;
     errEl.classList.remove('hidden');
-    console.error('Erro no upload:', err);
   }
 }
 
@@ -723,48 +610,21 @@ function resetUploadForm() {
   document.getElementById('upload-area').style.borderColor = '';
 }
 
-// ── Listagem de PDFs ──────────────────────────────────────────────────
 async function carregarPdfs() {
   if (!estudosCategoriaAtual) return;
-
   const loadingEl = document.getElementById('pdfs-loading');
   const container = document.getElementById('pdfs-por-materia');
-
   loadingEl.classList.remove('hidden');
   container.innerHTML = '';
-
   try {
-    // Busca os PDFs do tipo (categoria) atual
-    const { data, error } = await sb
-      .from('materiais_estudo')
-      .select('*')
-      .eq('tipo', estudosCategoriaAtual)
-      .order('materia', { ascending: true })
-      .order('created_at', { ascending: false });
-
+    const { data, error } = await sb.from('materiais_estudo').select('*').eq('tipo', estudosCategoriaAtual).order('materia', { ascending: true }).order('created_at', { ascending: false });
     loadingEl.classList.add('hidden');
-
     if (error) throw error;
-
-    if (!data || !data.length) {
-      container.innerHTML = '<p class="empty-state">Nenhum PDF enviado ainda. Clique em "+ Nova Matéria / Upload PDF".</p>';
-
-      // Atualiza datalist de matérias (sem PDFs ainda, mas ok)
-      return;
-    }
-
-    // Agrupa por matéria
+    if (!data || !data.length) { container.innerHTML = '<p class="empty-state">Nenhum PDF enviado ainda.</p>'; return; }
     const grupos = {};
-    data.forEach(item => {
-      if (!grupos[item.materia]) grupos[item.materia] = [];
-      grupos[item.materia].push(item);
-    });
-
-    // Popula o datalist para autocomplete
+    data.forEach(item => { if (!grupos[item.materia]) grupos[item.materia] = []; grupos[item.materia].push(item); });
     const datalist = document.getElementById('pdf-materias-list');
     datalist.innerHTML = Object.keys(grupos).map(m => `<option value="${m}">`).join('');
-
-    // Renderiza grupos
     container.innerHTML = Object.entries(grupos).map(([materia, itens]) => `
       <div class="pdfs-materia-grupo">
         <div class="pdfs-materia-titulo">📂 ${materia} <span style="font-size:0.75rem;color:var(--text-dim);font-weight:400">(${itens.length} arquivo${itens.length > 1 ? 's' : ''})</span></div>
@@ -781,15 +641,12 @@ async function carregarPdfs() {
             </div>`).join('')}
         </div>
       </div>`).join('');
-
   } catch (err) {
     loadingEl.classList.add('hidden');
     container.innerHTML = `<p class="empty-state" style="color:var(--saida)">Erro ao carregar PDFs: ${err.message}</p>`;
-    console.error('Erro ao carregar PDFs:', err);
   }
 }
 
-// ── Visualizador de PDF ───────────────────────────────────────────────
 function abrirPdf(url, titulo, materia) {
   document.getElementById('pdf-viewer-titulo').textContent = titulo;
   document.getElementById('pdf-viewer-materia').textContent = `📂 ${materia}`;
@@ -798,36 +655,21 @@ function abrirPdf(url, titulo, materia) {
   openModal('pdf-viewer-modal');
 }
 
-// ── Deletar PDF ───────────────────────────────────────────────────────
 async function deletarPdf(id, urlPdf) {
   if (!confirm('Remover este PDF permanentemente?')) return;
-
   try {
-    // Extrai o caminho do Storage a partir da URL pública
-    const urlObj   = new URL(urlPdf);
-    const caminho  = urlObj.pathname.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`)[1];
-
-    // 1️⃣  Remove do Storage
-    if (caminho) {
-      await sb.storage.from(STORAGE_BUCKET).remove([caminho]);
-    }
-
-    // 2️⃣  Remove do banco
+    const urlObj  = new URL(urlPdf);
+    const caminho = urlObj.pathname.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`)[1];
+    if (caminho) await sb.storage.from(STORAGE_BUCKET).remove([caminho]);
     const { error } = await sb.from('materiais_estudo').delete().eq('id', id);
     if (error) throw error;
-
-    // Recarrega a lista
     carregarPdfs();
   } catch (err) {
     alert('Erro ao remover PDF: ' + err.message);
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-}
-
+function escapeHtml(str) { return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 function formatarDataISO(isoStr) {
   if (!isoStr) return '';
   const d = new Date(isoStr);
@@ -835,19 +677,15 @@ function formatarDataISO(isoStr) {
 }
 
 // ══════════════════ FINANÇAS ══════════════════
-function formatMoney(v) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-}
+function formatMoney(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0); }
 
 function renderFinancas() {
   const fin = appData?.financas || { saldo: 0, historico: [] };
   const saldoEl = document.getElementById('saldo-display');
   saldoEl.textContent = formatMoney(fin.saldo);
   saldoEl.className = 'saldo-valor' + (fin.saldo < 0 ? ' negativo' : '');
-
   const list = document.getElementById('historico-list');
   if (!fin.historico.length) { list.innerHTML = '<p class="empty-state">Nenhuma transação ainda</p>'; return; }
-
   list.innerHTML = fin.historico.map(item => `
     <div class="historico-item">
       <div class="hist-tipo ${item.tipo}">${item.tipo === 'entrada' ? '↑' : '↓'}</div>
@@ -885,22 +723,13 @@ let addMusicaPlaylistId = null;
 function renderMusicas() {
   const data = appData?.musicas || { playlists: [] };
   musicPlayer.playlists = data.playlists;
-
   const panel = document.getElementById('playlists-panel');
   if (!panel) return;
-
-  if (!data.playlists.length) {
-    panel.innerHTML = '<p class="empty-state" id="playlists-empty">Nenhuma playlist ainda. Crie a primeira!</p>';
-    return;
-  }
-
+  if (!data.playlists.length) { panel.innerHTML = '<p class="empty-state" id="playlists-empty">Nenhuma playlist ainda. Crie a primeira!</p>'; return; }
   panel.innerHTML = data.playlists.map((pl, pIdx) => `
     <div class="playlist-card">
       <div class="playlist-header">
-        <div>
-          <h3>${pl.nome}</h3>
-          <span class="playlist-count">${pl.musicas.length} música(s)</span>
-        </div>
+        <div><h3>${pl.nome}</h3><span class="playlist-count">${pl.musicas.length} música(s)</span></div>
         <div class="playlist-actions">
           <button class="btn-icon" onclick="openAddMusicaModal(${pl.id})" title="Adicionar música">+</button>
           <button class="btn-icon" onclick="deletePlaylist(${pl.id})" title="Remover playlist">✕</button>
@@ -919,14 +748,8 @@ function renderMusicas() {
     </div>`).join('');
 }
 
-function isPlayingThisSong(pIdx, mIdx) {
-  return musicPlayer.playing && musicPlayer.currentPlaylistIdx === pIdx && musicPlayer.currentSongIdx === mIdx;
-}
-
-function openAddPlaylistModal() {
-  document.getElementById('nova-playlist-nome').value = '';
-  openModal('add-playlist-modal');
-}
+function isPlayingThisSong(pIdx, mIdx) { return musicPlayer.playing && musicPlayer.currentPlaylistIdx === pIdx && musicPlayer.currentSongIdx === mIdx; }
+function openAddPlaylistModal() { document.getElementById('nova-playlist-nome').value = ''; openModal('add-playlist-modal'); }
 
 async function addPlaylist() {
   const nome = document.getElementById('nova-playlist-nome').value.trim();
@@ -938,20 +761,10 @@ async function addPlaylist() {
 async function deletePlaylist(id) {
   if (!confirm('Remover esta playlist?')) return;
   const res = await api('DELETE', `/api/musicas/playlist/${id}`);
-  if (res.success) {
-    appData.musicas.playlists = appData.musicas.playlists.filter(p => p.id != id);
-    musicPlayer.playlists = appData.musicas.playlists;
-    renderMusicas();
-    renderDashboard();
-  }
+  if (res.success) { appData.musicas.playlists = appData.musicas.playlists.filter(p => p.id != id); musicPlayer.playlists = appData.musicas.playlists; renderMusicas(); renderDashboard(); }
 }
 
-function openAddMusicaModal(playlistId) {
-  addMusicaPlaylistId = playlistId;
-  document.getElementById('nova-musica-titulo').value = '';
-  document.getElementById('nova-musica-link').value = '';
-  openModal('add-musica-modal');
-}
+function openAddMusicaModal(playlistId) { addMusicaPlaylistId = playlistId; document.getElementById('nova-musica-titulo').value = ''; document.getElementById('nova-musica-link').value = ''; openModal('add-musica-modal'); }
 
 async function addMusica() {
   const titulo = document.getElementById('nova-musica-titulo').value.trim();
@@ -972,13 +785,9 @@ async function deleteSong(playlistId, musicaId) {
   }
 }
 
-// ── Music Player ──────────────────────────────────────────────────────
 function isDirectAudioLink(url) {
   if (!url) return false;
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return /\.(mp3|ogg|wav|aac|flac|m4a|opus|webm)(\?.*)?$/.test(pathname);
-  } catch { return false; }
+  try { const pathname = new URL(url).pathname.toLowerCase(); return /\.(mp3|ogg|wav|aac|flac|m4a|opus|webm)(\?.*)?$/.test(pathname); } catch { return false; }
 }
 
 function stopCurrentAudio() {
@@ -998,19 +807,11 @@ function playSong(playlistIdx, songIdx) {
     const audio = new Audio(song.link);
     audio.crossOrigin = 'anonymous';
     musicPlayer.audio = audio;
-    audio.addEventListener('timeupdate', () => {
-      if (audio.duration) {
-        const pct = (audio.currentTime / audio.duration) * 100;
-        const pf = document.getElementById('progress-fill');
-        if (pf) pf.style.width = pct + '%';
-      }
-    });
+    audio.addEventListener('timeupdate', () => { if (audio.duration) { const pct = (audio.currentTime / audio.duration) * 100; const pf = document.getElementById('progress-fill'); if (pf) pf.style.width = pct + '%'; } });
     audio.addEventListener('ended', () => { nextMusica(); });
     audio.addEventListener('error', () => { updatePlayerUI(); });
     audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); renderMusicas(); });
-  } else if (song.link) {
-    startProgressSimulation();
-  }
+  } else if (song.link) { startProgressSimulation(); }
   updatePlayerUI();
   renderMusicas();
 }
@@ -1049,18 +850,10 @@ function updatePlayerUI() {
 }
 
 function togglePlay() {
-  if (musicPlayer.currentSongIdx === -1) {
-    if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) playSong(0, 0);
-    return;
-  }
+  if (musicPlayer.currentSongIdx === -1) { if (musicPlayer.playlists.length && musicPlayer.playlists[0].musicas.length) playSong(0, 0); return; }
   musicPlayer.playing = !musicPlayer.playing;
-  if (musicPlayer.audio) {
-    if (musicPlayer.playing) musicPlayer.audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); });
-    else musicPlayer.audio.pause();
-  } else {
-    if (musicPlayer.playing) startProgressSimulation();
-    else clearInterval(musicPlayer.progressTimer);
-  }
+  if (musicPlayer.audio) { if (musicPlayer.playing) musicPlayer.audio.play().catch(() => { musicPlayer.playing = false; updatePlayerUI(); }); else musicPlayer.audio.pause(); }
+  else { if (musicPlayer.playing) startProgressSimulation(); else clearInterval(musicPlayer.progressTimer); }
   updatePlayerUI();
   renderMusicas();
 }
@@ -1101,36 +894,18 @@ function toggleOrder() {
 }
 
 // ══════════════════ CLIMA ══════════════════
-let climaData = null;
-
 function getWeatherIcon(code) {
-  if (code === 0) return '☀️';
-  if (code <= 2) return '⛅';
-  if (code === 3) return '☁️';
-  if (code <= 48) return '🌫️';
-  if (code <= 67) return '🌧️';
-  if (code <= 77) return '🌨️';
-  if (code <= 82) return '🌦️';
-  if (code <= 86) return '❄️';
-  if (code <= 99) return '⛈️';
-  return '🌤️';
+  if (code === 0) return '☀️'; if (code <= 2) return '⛅'; if (code === 3) return '☁️';
+  if (code <= 48) return '🌫️'; if (code <= 67) return '🌧️'; if (code <= 77) return '🌨️';
+  if (code <= 82) return '🌦️'; if (code <= 86) return '❄️'; if (code <= 99) return '⛈️'; return '🌤️';
 }
 
 function getWeatherDesc(code) {
-  if (code === 0) return 'Céu limpo';
-  if (code === 1) return 'Predominante limpo';
-  if (code === 2) return 'Parcialmente nublado';
-  if (code === 3) return 'Nublado';
-  if (code <= 48) return 'Neblina';
-  if (code <= 55) return 'Garoa';
-  if (code <= 57) return 'Garoa congelante';
-  if (code <= 65) return 'Chuva';
-  if (code <= 67) return 'Chuva forte';
-  if (code <= 77) return 'Neve';
-  if (code <= 82) return 'Pancadas de chuva';
-  if (code <= 86) return 'Pancadas de neve';
-  if (code <= 99) return 'Tempestade';
-  return 'Indisponível';
+  if (code === 0) return 'Céu limpo'; if (code === 1) return 'Predominante limpo'; if (code === 2) return 'Parcialmente nublado';
+  if (code === 3) return 'Nublado'; if (code <= 48) return 'Neblina'; if (code <= 55) return 'Garoa';
+  if (code <= 57) return 'Garoa congelante'; if (code <= 65) return 'Chuva'; if (code <= 67) return 'Chuva forte';
+  if (code <= 77) return 'Neve'; if (code <= 82) return 'Pancadas de chuva'; if (code <= 86) return 'Pancadas de neve';
+  if (code <= 99) return 'Tempestade'; return 'Indisponível';
 }
 
 async function loadClima() {
@@ -1140,14 +915,7 @@ async function loadClima() {
   loading.classList.remove('hidden');
   content.classList.add('hidden');
   errDiv.classList.add('hidden');
-
-  if (!navigator.geolocation) {
-    loading.classList.add('hidden');
-    errDiv.classList.remove('hidden');
-    document.getElementById('clima-error-msg').textContent = 'Geolocalização não suportada pelo navegador.';
-    return;
-  }
-
+  if (!navigator.geolocation) { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Geolocalização não suportada pelo navegador.'; return; }
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude, longitude } = pos.coords;
     try {
@@ -1156,13 +924,11 @@ async function loadClima() {
       const cidade  = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || 'Sua localização';
       const estado  = geoData.address?.state || '';
       document.getElementById('clima-cidade-label').textContent = `📍 ${cidade}${estado ? ', ' + estado : ''}`;
-
       const url   = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
       const wRes  = await fetch(url);
       const wData = await wRes.json();
       const cur   = wData.current;
       const daily = wData.daily;
-
       document.getElementById('clima-temp-hoje').textContent  = Math.round(cur.temperature_2m) + '°C';
       document.getElementById('clima-desc-hoje').textContent  = getWeatherDesc(cur.weather_code);
       document.getElementById('clima-icon-hoje').textContent  = getWeatherIcon(cur.weather_code);
@@ -1173,35 +939,21 @@ async function loadClima() {
       document.getElementById('clima-visib').textContent      = `${vis} visib.`;
       document.getElementById('dash-clima-icon').textContent  = getWeatherIcon(cur.weather_code);
       document.getElementById('dash-clima-info').textContent  = `${Math.round(cur.temperature_2m)}°C · ${getWeatherDesc(cur.weather_code)}`;
-
       const diasNomes = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
       document.getElementById('clima-forecast').innerHTML = daily.time.map((dateStr, i) => {
         const d = new Date(dateStr + 'T12:00:00');
         const isHoje = i === 0;
-        return `
-          <div class="clima-day-card bento-card ${isHoje ? 'clima-hoje-highlight' : ''}">
-            <div class="clima-day-nome">${isHoje ? 'Hoje' : diasNomes[d.getDay()]}</div>
-            <div class="clima-day-icon">${getWeatherIcon(daily.weather_code[i])}</div>
-            <div class="clima-day-desc">${getWeatherDesc(daily.weather_code[i])}</div>
-            <div class="clima-day-temps">
-              <span class="clima-max">${Math.round(daily.temperature_2m_max[i])}°</span>
-              <span class="clima-min">${Math.round(daily.temperature_2m_min[i])}°</span>
-            </div>
-          </div>`;
+        return `<div class="clima-day-card bento-card ${isHoje ? 'clima-hoje-highlight' : ''}">
+          <div class="clima-day-nome">${isHoje ? 'Hoje' : diasNomes[d.getDay()]}</div>
+          <div class="clima-day-icon">${getWeatherIcon(daily.weather_code[i])}</div>
+          <div class="clima-day-desc">${getWeatherDesc(daily.weather_code[i])}</div>
+          <div class="clima-day-temps"><span class="clima-max">${Math.round(daily.temperature_2m_max[i])}°</span><span class="clima-min">${Math.round(daily.temperature_2m_min[i])}°</span></div>
+        </div>`;
       }).join('');
-
       loading.classList.add('hidden');
       content.classList.remove('hidden');
-    } catch (e) {
-      loading.classList.add('hidden');
-      errDiv.classList.remove('hidden');
-      document.getElementById('clima-error-msg').textContent = 'Erro ao buscar dados do clima. Tente novamente.';
-    }
-  }, () => {
-    loading.classList.add('hidden');
-    errDiv.classList.remove('hidden');
-    document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada.';
-  });
+    } catch (e) { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Erro ao buscar dados do clima. Tente novamente.'; }
+  }, () => { loading.classList.add('hidden'); errDiv.classList.remove('hidden'); document.getElementById('clima-error-msg').textContent = 'Permissão de localização negada.'; });
 }
 
 // ══════════════════ NOTAS ══════════════════
@@ -1212,12 +964,7 @@ function getNotas() { return appData?.notas || []; }
 
 async function addNota() {
   const res = await api('POST', '/api/notas');
-  if (res.success) {
-    appData.notas = res.notas;
-    renderNotas();
-    renderDashboard();
-    abrirNota(res.notas[0].id);
-  }
+  if (res.success) { appData.notas = res.notas; renderNotas(); renderDashboard(); abrirNota(res.notas[0].id); }
 }
 
 function renderNotas() {
@@ -1260,10 +1007,7 @@ async function deletaNota(id) {
   const res = await api('DELETE', `/api/notas/${id}`);
   if (res.success) {
     appData.notas = res.notas;
-    if (notaAtualId === id) {
-      notaAtualId = null;
-      document.getElementById('nota-editor').innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`;
-    }
+    if (notaAtualId === id) { notaAtualId = null; document.getElementById('nota-editor').innerHTML = `<div class="nota-editor-vazio"><p>📝</p><p>Selecione ou crie uma nota</p></div>`; }
     renderNotas();
     renderDashboard();
   }
@@ -1274,20 +1018,12 @@ let livroTabAtual = 'lendo';
 
 function getLivros() { return appData?.livros || []; }
 
-function setLivroTab(status, btn) {
-  livroTabAtual = status;
-  document.querySelectorAll('.livro-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  renderLivros();
-}
+function setLivroTab(status, btn) { livroTabAtual = status; document.querySelectorAll('.livro-tab').forEach(t => t.classList.remove('active')); btn.classList.add('active'); renderLivros(); }
 
 function renderLivros() {
   const filtrados = getLivros().filter(l => l.status === livroTabAtual);
   const grid = document.getElementById('livros-grid');
-  if (!filtrados.length) {
-    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado.'}</p>`;
-    return;
-  }
+  if (!filtrados.length) { grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1">${livroTabAtual === 'lendo' ? 'Nenhum livro sendo lido no momento.' : 'Nenhum livro marcado.'}</p>`; return; }
   grid.innerHTML = filtrados.map(l => `
     <div class="bento-card livro-card">
       <div class="livro-emoji">${l.status === 'lido' ? '✅' : '📖'}</div>
@@ -1306,14 +1042,7 @@ async function addLivro() {
   const status = document.getElementById('livro-status').value;
   if (!titulo) return alert('Informe o título do livro.');
   const res = await api('POST', '/api/livros', { titulo, autor, status });
-  if (res.success) {
-    appData.livros = res.livros;
-    renderLivros();
-    renderDashboard();
-    closeModal('add-livro-modal');
-    document.getElementById('livro-titulo').value = '';
-    document.getElementById('livro-autor').value = '';
-  }
+  if (res.success) { appData.livros = res.livros; renderLivros(); renderDashboard(); closeModal('add-livro-modal'); document.getElementById('livro-titulo').value = ''; document.getElementById('livro-autor').value = ''; }
 }
 
 async function marcarLido(id) {
@@ -1346,7 +1075,6 @@ function renderCalendario() {
   const hoje        = new Date();
   const primeiroDia = new Date(calAno, calMes, 1).getDay();
   const diasNoMes   = new Date(calAno, calMes + 1, 0).getDate();
-
   let html = '';
   for (let i = 0; i < primeiroDia; i++) html += '<div class="cal-day vazio"></div>';
   for (let d = 1; d <= diasNoMes; d++) {
@@ -1354,21 +1082,13 @@ function renderCalendario() {
     const temEvento = (eventos[chave] || []).length > 0;
     const isHoje   = d === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear();
     const isSel    = calDiaSelecionado && calDiaSelecionado.d === d && calDiaSelecionado.m === calMes && calDiaSelecionado.a === calAno;
-    html += `<div class="cal-day ${isHoje ? 'cal-hoje' : ''} ${isSel ? 'cal-selecionado' : ''}" onclick="selecionarDia(${d})">
-      <span>${d}</span>
-      ${temEvento ? '<div class="cal-dot"></div>' : ''}
-    </div>`;
+    html += `<div class="cal-day ${isHoje ? 'cal-hoje' : ''} ${isSel ? 'cal-selecionado' : ''}" onclick="selecionarDia(${d})"><span>${d}</span>${temEvento ? '<div class="cal-dot"></div>' : ''}</div>`;
   }
   document.getElementById('cal-days').innerHTML = html;
   if (calDiaSelecionado) renderEventosDia();
 }
 
-function selecionarDia(d) {
-  calDiaSelecionado = { d, m: calMes, a: calAno };
-  renderCalendario();
-  document.getElementById('cal-eventos-hoje').style.display = 'block';
-  renderEventosDia();
-}
+function selecionarDia(d) { calDiaSelecionado = { d, m: calMes, a: calAno }; renderCalendario(); document.getElementById('cal-eventos-hoje').style.display = 'block'; renderEventosDia(); }
 
 function renderEventosDia() {
   const { d, m, a } = calDiaSelecionado;
@@ -1381,19 +1101,12 @@ function renderEventosDia() {
   lista.innerHTML = eventos.map(ev => `
     <div class="evento-item">
       <div class="evento-dot"></div>
-      <div class="evento-info">
-        <span class="evento-titulo">${ev.titulo}</span>
-        ${ev.hora ? `<span class="evento-hora">🕐 ${ev.hora}</span>` : ''}
-      </div>
+      <div class="evento-info"><span class="evento-titulo">${ev.titulo}</span>${ev.hora ? `<span class="evento-hora">🕐 ${ev.hora}</span>` : ''}</div>
       <button class="btn-icon" onclick="deletaEvento('${chave}', ${ev.id})">✕</button>
     </div>`).join('');
 }
 
-function openAddEvento() {
-  document.getElementById('evento-titulo').value = '';
-  document.getElementById('evento-hora').value = '';
-  openModal('add-evento-modal');
-}
+function openAddEvento() { document.getElementById('evento-titulo').value = ''; document.getElementById('evento-hora').value = ''; openModal('add-evento-modal'); }
 
 async function addEvento() {
   if (!calDiaSelecionado) return;
