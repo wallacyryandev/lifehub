@@ -31,6 +31,15 @@ const TEMPLATE = {
 document.addEventListener('DOMContentLoaded', async () => {
   setupAuthTabs();
 
+  // Botão voltar do Android fecha sidebar/modal aberto
+  window.addEventListener('popstate', (e) => {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar?.classList.contains('open')) { closeSidebar(); return; }
+    // Fecha qualquer modal aberto
+    const modal = document.querySelector('.modal-overlay:not(.hidden)');
+    if (modal) { modal.classList.add('hidden'); history.pushState(null, ''); return; }
+  });
+
   // Ouve mudanças de sessão (login/logout/refresh)
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
@@ -346,10 +355,19 @@ function addMateria() {
   renderEstudos();
   renderDashboard();
 }
-
-{
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('hidden');
+}
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen  = sidebar.classList.contains('open');
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.remove('hidden');
+    // Empurra estado no histórico para o botão voltar do Android fechar o menu
+    history.pushState({ sidebar: true }, '');
+  }
 }
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
