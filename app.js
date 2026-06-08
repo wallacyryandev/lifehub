@@ -146,20 +146,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (modal) { modal.classList.add('hidden'); history.pushState(null, ''); return; }
   });
 
-  // Ouve mudanças de sessão (login/logout/refresh)
+  // Verifica sessão já existente e ouve mudanças
+  const { data: { session: initialSession } } = await sb.auth.getSession();
+
+  if (initialSession?.user) {
+    currentUser = initialSession.user;
+    await initApp();
+  } else {
+    showAuthScreen();
+  }
+
+  // Ouve mudanças futuras de sessão (login/logout)
   sb.auth.onAuthStateChange(async (event, session) => {
-    if (session?.user) {
+    if (event === 'SIGNED_IN' && session?.user) {
       currentUser = session.user;
-      await initApp();
-    } else {
+      if (document.getElementById('auth-screen') && !document.getElementById('auth-screen').classList.contains('hidden')) {
+        await initApp();
+      }
+    } else if (event === 'SIGNED_OUT') {
       currentUser = null;
+      appData = null;
       showAuthScreen();
     }
   });
-
-  // Verifica sessão já existente
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) showAuthScreen();
 });
 
 // ═══════════════════════════════════════════════════════════════
