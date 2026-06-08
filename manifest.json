@@ -20,20 +20,8 @@
     { "src": "/public/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable any" }
   ],
   "shortcuts": [
-    {
-      "name": "Treino", "short_name": "Treino", "description": "Ir para treino",
-      "url": "/?module=treino",
-      "icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Notas", "short_name": "Notas", "description": "Ir para notas",
-      "url": "/?module=notas",
-      "icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Calendário", "short_name": "Calendário", "description": "Ver calendário",
-      "url": "/?module=calendario",
-      "icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }]
-    }
+    { "name": "Treino",    "url": "/?module=treino",    "icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }] },
+    { "name": "Notas",     "url": "/?module=notas",     "icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }] },
+    { "name": "Calendário","url": "/?module=calendario","icons": [{ "src": "/public/icons/icon-96x96.png", "sizes": "96x96" }] }
   ]
 }

@@ -1,52 +1,33 @@
 // LifeHub Service Worker
-const CACHE_NAME = 'lifehub-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/style.css',
-  '/manifest.json'
-];
+const CACHE_NAME = 'lifehub-v2';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
+// Network first — não cacheia nada, só passa a requisição
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  if (e.request.url.includes('supabase')) return; // não cacheia Supabase
-
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      return cached || fetch(e.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        return response;
-      });
-    }).catch(() => caches.match('/index.html'))
-  );
+  if (e.request.url.includes('supabase')) return;
+  // Deixa o browser lidar normalmente
 });
 
-// ── Notificações push (enviadas pelo app via postMessage) ────────
+// Notificações push
 self.addEventListener('message', (e) => {
   if (e.data?.type === 'SHOW_NOTIFICATION') {
-    const { title, body, icon, tag, badge } = e.data.payload;
+    const { title, body, icon, tag } = e.data.payload;
     self.registration.showNotification(title, {
       body,
-      icon:  icon  || '/icons/icon-192x192.png',
-      badge: badge || '/icons/icon-72x72.png',
+      icon: icon || '/public/icons/icon-192x192.png',
       tag,
       renotify: true,
       vibrate: [200, 100, 200],
@@ -63,4 +44,4 @@ self.addEventListener('notificationclick', (e) => {
       return clients.openWindow('/');
     })
   );
-})
+});
