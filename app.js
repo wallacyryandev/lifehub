@@ -5,7 +5,7 @@
 
 // ── Supabase init ────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://vihscazkhychhlnqtwof.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_2dcZSkRVc7lVuabCWCBDbQ_nLv0eUs_';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpaHNjYXpraHljaGhsbnF0d29mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNTM2MjAsImV4cCI6MjA5NTkyOTYyMH0.lxbkw8jmoZ4nSSCWi5wUDGxN7KZHUq4b-Fe0kgr_TBc';
 let sb = null;
 
 // ── Estado global ────────────────────────────────────────────────
@@ -182,10 +182,16 @@ async function doLogin() {
   const errEl  = document.getElementById('login-error');
   errEl.classList.add('hidden');
 
-  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
-  if (error) {
-    errEl.textContent = 'E-mail ou senha inválidos.';
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    if (error) {
+      errEl.textContent = 'E-mail ou senha inválidos.';
+      errEl.classList.remove('hidden');
+    }
+  } catch(e) {
+    errEl.textContent = 'Erro de conexão. Tente novamente.';
     errEl.classList.remove('hidden');
+    console.error('Erro login:', e);
   }
 }
 
